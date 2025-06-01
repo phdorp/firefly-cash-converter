@@ -6,6 +6,7 @@ dependencies = [
     "pandas",
     "numpy",
     "openpyxl",
+    "pytr"
 ]
 
 [build-system]
