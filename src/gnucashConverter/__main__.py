@@ -16,10 +16,11 @@ def main():
         type=str,
         help="Path to the output file where the converted data will be saved.",
     )
+    parser.add_argument("--source", type=str, choices=["barclays", "paypal"],)
 
     arguments = parser.parse_args()
 
-    loader = ldb.DataLoaderBarclays(arguments.input_file)
+    loader = ldb.loaderMapping[arguments.source](arguments.input_file)
     loader.load()
 
     converter = cdt.ConvertData(loader.data)

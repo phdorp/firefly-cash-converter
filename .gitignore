@@ -1,7 +1,12 @@
 /.conda
 /.lprof
 /.mypy_cache
+build
+*.lock
+
 
 *.pyc
 
 *.egg-info
+
+./data
