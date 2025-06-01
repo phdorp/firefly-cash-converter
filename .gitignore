@@ -1,0 +1,7 @@
+/.conda
+/.lprof
+/.mypy_cache
+
+*.pyc
+
+*.egg-info
