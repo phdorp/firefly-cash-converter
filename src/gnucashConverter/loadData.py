@@ -57,6 +57,49 @@ class DataLoaderXlsx(DataLoader):
         """
 
 
+class DataLoaderPaypal(DataLoaderXlsx):
+
+    def __init__(self, dataPath):
+        super().__init__(dataPath)
+
+        self._fieldAliases = {"Beschreibung": Fields.DESCRIPTION, "Datum": Fields.DATE, "Brutto": Fields.DEPOSIT}
+        self._fieldFilters = [lambda content: content.replace('"', "") for _ in self._fieldFilters]
+        self._fieldFilters[Fields.DEPOSIT] = lambda content: content.replace('"', "").replace(",", ".")
+        self._separator = ',"'
+
+    def _parseData(self, dataFrame: pd.DataFrame) -> List[data.Transaction]:
+        """
+        Parse the data from the DataFrame specific to Barclays format.
+
+        Args:
+            dataFrame (pd.DataFrame): The DataFrame to parse.
+
+        Returns:
+            acc.Account: Parsed account data.
+        """
+
+        # Determine and filter field names in file and
+        fieldNamesFile = dataFrame.columns[0].split(self._separator)
+        fieldNamesFile = [name.replace('"', "") for name in fieldNamesFile]
+
+        # Get colum indices of the thought fileds
+        colIdcs: List[int] = []
+        for fieldAlias in self._fieldAliases:
+            colIdcs.append(fieldNamesFile.index(fieldAlias))
+
+        # Create transactions from each row
+        transactions: List[data.Transaction] = []
+        for row in dataFrame.values:
+            transactionData: Dict[str, Any] = {}
+            for colIdx, fieldAlias in zip(colIdcs, self._fieldAliases):
+                field = self._fieldAliases[fieldAlias]
+                content = row[0].split(self._separator)[colIdx]
+                transactionData[self._fieldNames[field]] = self._fieldTypes[field](self._fieldFilters[field](content))
+            transactions.append(data.Transaction(**transactionData))
+
+        return transactions
+
+
 class DataLoaderBarclays(DataLoaderXlsx):
 
     def __init__(self, dataPath):
@@ -101,3 +144,5 @@ class DataLoaderBarclays(DataLoaderXlsx):
                 transactions.append(data.Transaction(**transactionData))
 
         return transactions
+
+loaderMapping = {"barclays": DataLoaderBarclays, "paypal": DataLoaderPaypal}
