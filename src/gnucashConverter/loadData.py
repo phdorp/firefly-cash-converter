@@ -144,3 +144,5 @@ class DataLoaderBarclays(DataLoaderXlsx):
                 transactions.append(data.Transaction(**transactionData))
 
         return transactions
+
+loaderMapping = {"barclays": DataLoaderBarclays, "paypal": DataLoaderPaypal}
