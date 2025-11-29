@@ -14,6 +14,7 @@ class Fields(enum.IntEnum):
     DATE = 1
     DEPOSIT = 2
 
+
 class DataLoader(abc.ABC):
     @property
     def data(self) -> List[data.Transaction]:
@@ -47,11 +48,13 @@ class DataLoader(abc.ABC):
         `self._dataPath`.
         """
 
-class TableDataLoader(DataLoader):    
+
+class TableDataLoader(DataLoader):
     """
     Base class for data loaders that operate on tabular data formats (e.g., CSV and Excel).
     Introduces the headerRowIdx attribute to specify the index of the header row in the data file.
     """
+
     def __init__(self, headerRowIdx: int, dataPath: str):
         """Initialize a table-style loader.
 
@@ -119,6 +122,7 @@ class TableDataLoader(DataLoader):
 
         return self._getTransactions(dataFrame, colIdcs)
 
+
 class DataLoaderXlsx(TableDataLoader):
 
     def __init__(self, headerRowIdx: int, dataPath: str):
@@ -139,7 +143,8 @@ class DataLoaderXlsx(TableDataLoader):
         """
         self._data = self._parseData(pd.read_excel(self._dataPath))
 
-class DataLoaderCsv(TableDataLoader): 
+
+class DataLoaderCsv(TableDataLoader):
     """
     Data loader for CSV files.
     This class loads transaction data from a CSV file, using the specified separator and header row index.
@@ -147,7 +152,8 @@ class DataLoaderCsv(TableDataLoader):
         separator (str): The delimiter used in the CSV file.
         headerRowIdx (int): The index of the header row in the CSV file.
         dataPath (str): Path to the CSV file to load.
-    """   
+    """
+
     def __init__(self, separator: str, headerRowIdx: int, dataPath: str):
         """Create a CSV table loader.
 
@@ -169,6 +175,7 @@ class DataLoaderCsv(TableDataLoader):
         """
         self._data = self._parseData(pd.read_csv(self._dataPath, sep=self._separator, header=None))
 
+
 class DataLoaderPaypal(DataLoaderCsv):
 
     def __init__(self, dataPath):
@@ -177,7 +184,7 @@ class DataLoaderPaypal(DataLoaderCsv):
         Args:
             dataPath (str): Path to the PayPal CSV file.
         """
-        super().__init__(separator=',', headerRowIdx=0, dataPath=dataPath)
+        super().__init__(separator=",", headerRowIdx=0, dataPath=dataPath)
 
         self._fieldAliases = {
             "Beschreibung": Fields.DESCRIPTION,
@@ -189,6 +196,7 @@ class DataLoaderPaypal(DataLoaderCsv):
         self._fieldFilters = [lambda content: content.replace('"', "") for _ in self._fieldFilters]
         # Convert German-formatted numbers (e.g., "1.234,56 €") to standard float format ("1234.56")
         self._fieldFilters[Fields.DEPOSIT] = lambda content: content.replace('"', "").replace(",", ".")
+
 
 class DataLoaderBarclays(DataLoaderXlsx):
 
@@ -207,7 +215,10 @@ class DataLoaderBarclays(DataLoaderXlsx):
             "Originalbetrag": Fields.DEPOSIT,
         }
         # Convert German-formatted numbers (e.g., "1.234,56 €") to standard float format ("1234.56")
-        self._fieldFilters[Fields.DEPOSIT] = lambda content: content.replace(".", "").replace(",", ".").replace(" €", "")  
+        self._fieldFilters[Fields.DEPOSIT] = (
+            lambda content: content.replace(".", "").replace(",", ".").replace(" €", "")
+        )
+
 
 class DataLoaderTr(DataLoaderCsv):
 
@@ -217,7 +228,7 @@ class DataLoaderTr(DataLoaderCsv):
         Args:
             dataPath (str): Path to the Trade Republic CSV file.
         """
-        super().__init__(separator=';', headerRowIdx=0, dataPath=dataPath)
+        super().__init__(separator=";", headerRowIdx=0, dataPath=dataPath)
 
         self._fieldAliases = {
             "Note": Fields.DESCRIPTION,
@@ -226,5 +237,6 @@ class DataLoaderTr(DataLoaderCsv):
             "Value": Fields.DEPOSIT,
         }
         self._fieldFilters[Fields.DATE] = lambda content: ".".join(str(content).split("T")[0].split("-")[::-1])
+
 
 loaderMapping = {"barclays": DataLoaderBarclays, "paypal": DataLoaderPaypal, "trade_republic": DataLoaderTr}
