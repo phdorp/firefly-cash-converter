@@ -92,7 +92,7 @@ class TableDataLoader(DataLoader):
         return transactions
 
     def _parseData(self, dataFrame: pd.DataFrame) -> List[data.Transaction]:
-        """Parse the data from tabular data``DataFrame``.
+        """Parse the data from tabular data ``DataFrame``.
 
         Locates the header row at ``self._headerRowIdx`` to determine the
         column indices for the fields in ``self._fieldAliases`` and
@@ -204,4 +204,4 @@ class DataLoaderTr(DataLoaderCsv):
         self._fieldAliases = {"Note": Fields.DESCRIPTION, "Date": Fields.DATE, "Value": Fields.DEPOSIT}
         self._fieldFilters[Fields.DATE] = lambda content: ".".join(str(content).split("T")[0].split("-")[::-1])
 
-loaderMapping = {"barclays": DataLoaderBarclays, "paypal": DataLoaderPaypal}
+loaderMapping = {"barclays": DataLoaderBarclays, "paypal": DataLoaderPaypal, "trade_republic": DataLoaderTr}

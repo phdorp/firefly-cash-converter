@@ -16,7 +16,7 @@ def main():
         type=str,
         help="Path to the output file where the converted data will be saved.",
     )
-    parser.add_argument("--source", type=str, choices=["barclays", "paypal"],)
+    parser.add_argument("--source", type=str, choices=["barclays", "paypal", "trade_republic"],)
 
     arguments = parser.parse_args()
 
