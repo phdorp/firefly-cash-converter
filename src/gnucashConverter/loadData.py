@@ -14,6 +14,7 @@ class Fields(enum.IntEnum):
     DATE = 1
     DEPOSIT = 2
 
+
 class DataLoader(abc.ABC):
     @property
     def data(self) -> List[data.Transaction]:
@@ -36,6 +37,7 @@ class DataLoader(abc.ABC):
         self._fieldTypes: List[type] = [str, str, float]
         self._fieldAliases: Dict[str, Fields] = {fieldName: Fields[fieldName.upper()] for fieldName in self._fieldNames}
         self._fieldFilters: List[Callable[[str], str]] = [lambda content: content for _ in self._fieldNames]
+        self._fieldMergeSep = ", "  # Separator used when merging multiple entries into one field
 
     @abc.abstractmethod
     def load(self):
@@ -46,11 +48,13 @@ class DataLoader(abc.ABC):
         `self._dataPath`.
         """
 
-class TableDataLoader(DataLoader):    
+
+class TableDataLoader(DataLoader):
     """
     Base class for data loaders that operate on tabular data formats (e.g., CSV and Excel).
     Introduces the headerRowIdx attribute to specify the index of the header row in the data file.
     """
+
     def __init__(self, headerRowIdx: int, dataPath: str):
         """Initialize a table-style loader.
 
@@ -83,7 +87,15 @@ class TableDataLoader(DataLoader):
             transactionData: Dict[str, Any] = {}
             for colIdx, fieldAlias in zip(colIdcs, self._fieldAliases):
                 field = self._fieldAliases[fieldAlias]
-                transactionData[self._fieldNames[field]] = self._fieldTypes[field](self._fieldFilters[field](row[colIdx]))
+                storedData = transactionData.get(self._fieldNames[field], None)
+                inputData = self._fieldTypes[field](self._fieldFilters[field](row[colIdx]))
+
+                if storedData is None:
+                    transactionData[self._fieldNames[field]] = inputData
+                elif isinstance(inputData, str) and isinstance(storedData, str):
+                    transactionData[self._fieldNames[field]] += self._fieldMergeSep + inputData
+                else:
+                    raise ValueError(f"Cannot merge multiple values for non-string field {self._fieldNames[field]}")  
 
             # Only add the transaction if it contains data
             if len(transactionData) > 0:
@@ -111,7 +123,8 @@ class TableDataLoader(DataLoader):
             colIdcs.append(np.where(dataFrame.values[self._headerRowIdx, :] == fieldAlias)[0][0])
 
         return self._getTransactions(dataFrame, colIdcs)
-        
+
+
 class DataLoaderXlsx(TableDataLoader):
 
     def __init__(self, headerRowIdx: int, dataPath: str):
@@ -132,7 +145,8 @@ class DataLoaderXlsx(TableDataLoader):
         """
         self._data = self._parseData(pd.read_excel(self._dataPath))
 
-class DataLoaderCsv(TableDataLoader): 
+
+class DataLoaderCsv(TableDataLoader):
     """
     Data loader for CSV files.
     This class loads transaction data from a CSV file, using the specified separator and header row index.
@@ -140,7 +154,8 @@ class DataLoaderCsv(TableDataLoader):
         separator (str): The delimiter used in the CSV file.
         headerRowIdx (int): The index of the header row in the CSV file.
         dataPath (str): Path to the CSV file to load.
-    """   
+    """
+
     def __init__(self, separator: str, headerRowIdx: int, dataPath: str):
         """Create a CSV table loader.
 
@@ -162,6 +177,7 @@ class DataLoaderCsv(TableDataLoader):
         """
         self._data = self._parseData(pd.read_csv(self._dataPath, sep=self._separator, header=None))
 
+
 class DataLoaderPaypal(DataLoaderCsv):
 
     def __init__(self, dataPath):
@@ -170,13 +186,20 @@ class DataLoaderPaypal(DataLoaderCsv):
         Args:
             dataPath (str): Path to the PayPal CSV file.
         """
-        super().__init__(separator=',', headerRowIdx=0, dataPath=dataPath)
+        super().__init__(separator=",", headerRowIdx=0, dataPath=dataPath)
 
-        self._fieldAliases = {"Beschreibung": Fields.DESCRIPTION, "Datum": Fields.DATE, "Brutto": Fields.DEPOSIT}
+        self._fieldAliases = {
+            "Beschreibung": Fields.DESCRIPTION,
+            "Absender E-Mail-Adresse": Fields.DESCRIPTION,
+            "Name": Fields.DESCRIPTION,
+            "Datum": Fields.DATE,
+            "Brutto": Fields.DEPOSIT,
+        }
         self._fieldFilters = [lambda content: content.replace('"', "") for _ in self._fieldFilters]
         # Convert German-formatted numbers (e.g., "1.234,56 €") to standard float format ("1234.56")
         self._fieldFilters[Fields.DEPOSIT] = lambda content: content.replace('"', "").replace(",", ".")
-    
+
+
 class DataLoaderBarclays(DataLoaderXlsx):
 
     def __init__(self, dataPath):
@@ -187,21 +210,35 @@ class DataLoaderBarclays(DataLoaderXlsx):
         """
         super().__init__(headerRowIdx=11, dataPath=dataPath)
 
-        self._fieldAliases = {"Beschreibung": Fields.DESCRIPTION, "Buchungsdatum": Fields.DATE, "Originalbetrag": Fields.DEPOSIT}
+        self._fieldAliases = {
+            "Beschreibung": Fields.DESCRIPTION,
+            "Händlerdetails": Fields.DESCRIPTION,
+            "Buchungsdatum": Fields.DATE,
+            "Originalbetrag": Fields.DEPOSIT,
+        }
         # Convert German-formatted numbers (e.g., "1.234,56 €") to standard float format ("1234.56")
-        self._fieldFilters[Fields.DEPOSIT] = lambda content: content.replace(".", "").replace(",", ".").replace(" €", "")  
-    
+        self._fieldFilters[Fields.DEPOSIT] = (
+            lambda content: content.replace(".", "").replace(",", ".").replace(" €", "")
+        )
+
+
 class DataLoaderTr(DataLoaderCsv):
-    
+
     def __init__(self, dataPath):
         """Initialize a Trade Republic CSV loader.
 
         Args:
             dataPath (str): Path to the Trade Republic CSV file.
         """
-        super().__init__(separator=';', headerRowIdx=0, dataPath=dataPath)
+        super().__init__(separator=";", headerRowIdx=0, dataPath=dataPath)
 
-        self._fieldAliases = {"Note": Fields.DESCRIPTION, "Date": Fields.DATE, "Value": Fields.DEPOSIT}
+        self._fieldAliases = {
+            "Note": Fields.DESCRIPTION,
+            "Type": Fields.DESCRIPTION,
+            "Date": Fields.DATE,
+            "Value": Fields.DEPOSIT,
+        }
         self._fieldFilters[Fields.DATE] = lambda content: ".".join(str(content).split("T")[0].split("-")[::-1])
+
 
 loaderMapping = {"barclays": DataLoaderBarclays, "paypal": DataLoaderPaypal, "trade_republic": DataLoaderTr}
