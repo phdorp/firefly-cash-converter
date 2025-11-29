@@ -199,7 +199,8 @@ class DataLoaderBarclays(DataLoaderXlsx):
         super().__init__(headerRowIdx=11, dataPath=dataPath)
 
         self._fieldAliases = {"Beschreibung": Fields.DESCRIPTION, "Buchungsdatum": Fields.DATE, "Originalbetrag": Fields.DEPOSIT}
-        self._fieldFilters[Fields.DEPOSIT] = lambda content: content.replace(",", ".").replace(" €", "")
+        # Convert German-formatted numbers (e.g., "1.234,56 €") to standard float format ("1234.56")
+        self._fieldFilters[Fields.DEPOSIT] = lambda content: content.replace(".", "").replace(",", ".").replace(" €", "")  
 
     def _parseData(self, dataFrame: pd.DataFrame) -> List[data.Transaction]:
         """Parse the data from a Barclays Excel ``DataFrame``.
