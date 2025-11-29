@@ -56,8 +56,29 @@ class DataLoaderXlsx(DataLoader):
             List[data.Transaction]: Parsed transaction data.
         """
 
+class DataLoaderCsv(DataLoader):
+    def load(self):
+        """
+        Load data from a CSV file.
 
-class DataLoaderPaypal(DataLoaderXlsx):
+        Returns:
+            pd.DataFrame: Data loaded from the CSV file.
+        """
+        self._data = self._parseData(pd.read_csv(self._dataPath, header=None))
+
+    @abc.abstractmethod
+    def _parseData(self, dataFrame: pd.DataFrame) -> List[data.Transaction]:
+        """
+        Parse the data from the DataFrame.
+
+        Args:
+            dataFrame (pd.DataFrame): The DataFrame to parse.
+        
+        Returns:
+            List[data.Transaction]: Parsed transaction data.
+        """
+
+class DataLoaderPaypal(DataLoaderCsv):
 
     def __init__(self, dataPath):
         super().__init__(dataPath)
