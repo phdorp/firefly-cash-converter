@@ -36,6 +36,7 @@ class DataLoader(abc.ABC):
         self._fieldTypes: List[type] = [str, str, float]
         self._fieldAliases: Dict[str, Fields] = {fieldName: Fields[fieldName.upper()] for fieldName in self._fieldNames}
         self._fieldFilters: List[Callable[[str], str]] = [lambda content: content for _ in self._fieldNames]
+        self._fieldMergeSep = ", "  # Separator used when merging multiple entries into one field
 
     @abc.abstractmethod
     def load(self):
@@ -83,7 +84,13 @@ class TableDataLoader(DataLoader):
             transactionData: Dict[str, Any] = {}
             for colIdx, fieldAlias in zip(colIdcs, self._fieldAliases):
                 field = self._fieldAliases[fieldAlias]
-                transactionData[self._fieldNames[field]] = self._fieldTypes[field](self._fieldFilters[field](row[colIdx]))
+                storedData = transactionData.get(self._fieldNames[field], None)
+                inputData = self._fieldTypes[field](self._fieldFilters[field](row[colIdx]))
+
+                if storedData is None:
+                    transactionData[self._fieldNames[field]] = inputData
+                else:
+                    transactionData[self._fieldNames[field]] += self._fieldMergeSep + inputData
 
             # Only add the transaction if it contains data
             if len(transactionData) > 0:
@@ -111,7 +118,7 @@ class TableDataLoader(DataLoader):
             colIdcs.append(np.where(dataFrame.values[self._headerRowIdx, :] == fieldAlias)[0][0])
 
         return self._getTransactions(dataFrame, colIdcs)
-        
+
 class DataLoaderXlsx(TableDataLoader):
 
     def __init__(self, headerRowIdx: int, dataPath: str):
@@ -172,11 +179,17 @@ class DataLoaderPaypal(DataLoaderCsv):
         """
         super().__init__(separator=',', headerRowIdx=0, dataPath=dataPath)
 
-        self._fieldAliases = {"Beschreibung": Fields.DESCRIPTION, "Datum": Fields.DATE, "Brutto": Fields.DEPOSIT}
+        self._fieldAliases = {
+            "Beschreibung": Fields.DESCRIPTION,
+            "Absender E-Mail-Adresse": Fields.DESCRIPTION,
+            "Name": Fields.DESCRIPTION,
+            "Datum": Fields.DATE,
+            "Brutto": Fields.DEPOSIT,
+        }
         self._fieldFilters = [lambda content: content.replace('"', "") for _ in self._fieldFilters]
         # Convert German-formatted numbers (e.g., "1.234,56 €") to standard float format ("1234.56")
         self._fieldFilters[Fields.DEPOSIT] = lambda content: content.replace('"', "").replace(",", ".")
-    
+
 class DataLoaderBarclays(DataLoaderXlsx):
 
     def __init__(self, dataPath):
@@ -187,12 +200,17 @@ class DataLoaderBarclays(DataLoaderXlsx):
         """
         super().__init__(headerRowIdx=11, dataPath=dataPath)
 
-        self._fieldAliases = {"Beschreibung": Fields.DESCRIPTION, "Buchungsdatum": Fields.DATE, "Originalbetrag": Fields.DEPOSIT}
+        self._fieldAliases = {
+            "Beschreibung": Fields.DESCRIPTION,
+            "Händlerdetails": Fields.DESCRIPTION,
+            "Buchungsdatum": Fields.DATE,
+            "Originalbetrag": Fields.DEPOSIT,
+        }
         # Convert German-formatted numbers (e.g., "1.234,56 €") to standard float format ("1234.56")
         self._fieldFilters[Fields.DEPOSIT] = lambda content: content.replace(".", "").replace(",", ".").replace(" €", "")  
-    
+
 class DataLoaderTr(DataLoaderCsv):
-    
+
     def __init__(self, dataPath):
         """Initialize a Trade Republic CSV loader.
 
@@ -201,7 +219,12 @@ class DataLoaderTr(DataLoaderCsv):
         """
         super().__init__(separator=';', headerRowIdx=0, dataPath=dataPath)
 
-        self._fieldAliases = {"Note": Fields.DESCRIPTION, "Date": Fields.DATE, "Value": Fields.DEPOSIT}
+        self._fieldAliases = {
+            "Note": Fields.DESCRIPTION,
+            "Type": Fields.DESCRIPTION,
+            "Date": Fields.DATE,
+            "Value": Fields.DEPOSIT,
+        }
         self._fieldFilters[Fields.DATE] = lambda content: ".".join(str(content).split("T")[0].split("-")[::-1])
 
 loaderMapping = {"barclays": DataLoaderBarclays, "paypal": DataLoaderPaypal, "trade_republic": DataLoaderTr}
