@@ -14,7 +14,7 @@ class TestLoaderBarclays(unittest.TestCase):
         self._loader.load()
 
         self.assertEqual(self._loader.data[0].Date, "30.05.2025")
-        self.assertEqual(self._loader.data[0].Deposit, -19.25)
+        self.assertEqual(self._loader.data[0].Deposit, -1619.25)
         self.assertEqual(self._loader.data[0].Description, "Test1")
 
         self.assertEqual(self._loader.data[1].Date, "30.05.2024")
