@@ -40,6 +40,26 @@ class TableDataLoader(DataLoader):
     def __init__(self, headerRowIdx: int, dataPath: str):
         self._headerRowIdx = headerRowIdx
         super().__init__(dataPath)
+    
+    def _getDataRow(self, dataFrame: pd.DataFrame, rowIdx: int) -> np.ndarray:
+        return dataFrame.values[rowIdx]
+
+    def _getTransactions(self, dataFrame: pd.DataFrame, colIdcs: List[int]) -> List[data.Transaction]:
+        # Parse the transactions from the DataFrame
+        transactions: List[data.Transaction] = []
+        for rowIdx in range(self._headerRowIdx + 1, dataFrame.shape[0]):
+            # Create a dictionary to hold the current transaction data
+            row = self._getDataRow(dataFrame, rowIdx)
+            transactionData: Dict[str, Any] = {}
+            for colIdx, fieldAlias in zip(colIdcs, self._fieldAliases):
+                field = self._fieldAliases[fieldAlias]
+                transactionData[self._fieldNames[field]] = self._fieldTypes[field](self._fieldFilters[field](row[colIdx]))
+
+            # Only add the transaction if it contains data
+            if len(transactionData) > 0:
+                transactions.append(data.Transaction(**transactionData))
+        
+        return transactions
 
 class DataLoaderXlsx(TableDataLoader):
 
@@ -79,23 +99,6 @@ class DataLoaderXlsx(TableDataLoader):
         Returns:
             np.ndarray: The data row.
         """
-
-    def _getTransactions(self, dataFrame: pd.DataFrame, colIdcs: List[int]) -> List[data.Transaction]:
-        # Parse the transactions from the DataFrame
-        transactions: List[data.Transaction] = []
-        for rowIdx in range(self._headerRowIdx + 1, dataFrame.shape[0]):
-            # Create a dictionary to hold the current transaction data
-            row = self._getDataRow(dataFrame, rowIdx)
-            transactionData: Dict[str, Any] = {}
-            for colIdx, fieldAlias in zip(colIdcs, self._fieldAliases):
-                field = self._fieldAliases[fieldAlias]
-                transactionData[self._fieldNames[field]] = self._fieldTypes[field](self._fieldFilters[field](row[colIdx]))
-
-            # Only add the transaction if it contains data
-            if len(transactionData) > 0:
-                transactions.append(data.Transaction(**transactionData))
-        
-        return transactions
 
 class DataLoaderCsv(TableDataLoader): 
     """
@@ -142,7 +145,7 @@ class DataLoaderPaypal(DataLoaderCsv):
         self._fieldFilters[Fields.DEPOSIT] = lambda content: content.replace('"', "").replace(",", ".")
 
     def _getDataRow(self, dataFrame: pd.DataFrame, rowIdx: int) -> np.ndarray:
-        return dataFrame.values[rowIdx][0].split(self._separator)
+        return dataFrame.values[rowIdx]
 
     def _parseData(self, dataFrame: pd.DataFrame) -> List[data.Transaction]:
         """
@@ -159,22 +162,11 @@ class DataLoaderPaypal(DataLoaderCsv):
         for fieldAlias in self._fieldAliases:
             colIdcs.append(np.where(dataFrame.values[0, :] == fieldAlias)[0][0])
 
-        # Create transactions from each row
-        transactions: List[data.Transaction] = []
-        for rowIdx in range(self._headerRowIdx + 1, dataFrame.shape[0]):
-            transactionData: Dict[str, Any] = {}
-            for colIdx, fieldAlias in zip(colIdcs, self._fieldAliases):
-                field = self._fieldAliases[fieldAlias]
-                content = dataFrame.values[rowIdx, colIdx]
-                transactionData[self._fieldNames[field]] = self._fieldTypes[field](self._fieldFilters[field](content))
-            transactions.append(data.Transaction(**transactionData))
-
-        return transactions
+        return self._getTransactions(dataFrame, colIdcs)
     
 class DataLoaderBarclays(DataLoaderXlsx):
 
     def __init__(self, dataPath):
-        super().__init__(headerRowIdx=11, dataPath=dataPath)
         super().__init__(headerRowIdx=11, dataPath=dataPath)
 
         self._fieldAliases = {"Beschreibung": Fields.DESCRIPTION, "Buchungsdatum": Fields.DATE, "Originalbetrag": Fields.DEPOSIT}
