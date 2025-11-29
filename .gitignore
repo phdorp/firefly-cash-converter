@@ -1,6 +1,9 @@
 /.conda
 /.lprof
 /.mypy_cache
+build
+*.lock
+
 
 *.pyc
 
