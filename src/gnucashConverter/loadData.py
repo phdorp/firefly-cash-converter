@@ -184,7 +184,7 @@ class DataLoaderPaypal(DataLoaderCsv):
         # Get column indices of the target fields
         colIdcs: List[int] = []
         for fieldAlias in self._fieldAliases:
-            colIdcs.append(np.where(dataFrame.values[0, :] == fieldAlias)[0][0])
+            colIdcs.append(np.where(dataFrame.values[self._headerRowIdx, :] == fieldAlias)[0][0])
 
         return self._getTransactions(dataFrame, colIdcs)
     
