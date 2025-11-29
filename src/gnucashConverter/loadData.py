@@ -33,6 +33,10 @@ class DataLoader(abc.ABC):
         pass
 
 class TableDataLoader(DataLoader):    
+    """
+    Base class for data loaders that operate on tabular data formats (e.g., CSV and Excel).
+    Introduces the headerRowIdx attribute to specify the index of the header row in the data file.
+    """
     def __init__(self, headerRowIdx: int, dataPath: str):
         self._headerRowIdx = headerRowIdx
         super().__init__(dataPath)
@@ -63,7 +67,15 @@ class DataLoaderXlsx(TableDataLoader):
             List[data.Transaction]: Parsed transaction data.
         """
 
-class DataLoaderCsv(TableDataLoader):    
+class DataLoaderCsv(TableDataLoader): 
+    """
+    Data loader for CSV files.
+    This class loads transaction data from a CSV file, using the specified separator and header row index.
+    Args:
+        separator (str): The delimiter used in the CSV file.
+        headerRowIdx (int): The index of the header row in the CSV file.
+        dataPath (str): Path to the CSV file to load.
+    """   
     def __init__(self, separator: str, headerRowIdx: int, dataPath: str):
         self._separator = separator
         super().__init__(headerRowIdx, dataPath)
@@ -96,6 +108,7 @@ class DataLoaderPaypal(DataLoaderCsv):
 
         self._fieldAliases = {"Beschreibung": Fields.DESCRIPTION, "Datum": Fields.DATE, "Brutto": Fields.DEPOSIT}
         self._fieldFilters = [lambda content: content.replace('"', "") for _ in self._fieldFilters]
+        # Convert German-formatted numbers (e.g., "1.234,56 €") to standard float format ("1234.56")
         self._fieldFilters[Fields.DEPOSIT] = lambda content: content.replace('"', "").replace(",", ".")
 
     def _parseData(self, dataFrame: pd.DataFrame) -> List[data.Transaction]:
@@ -106,9 +119,9 @@ class DataLoaderPaypal(DataLoaderCsv):
             dataFrame (pd.DataFrame): The DataFrame to parse.
 
         Returns:
-            acc.Account: Parsed account data.
+            List[data.Transaction]: Parsed account data.
         """
-        # Get colum indices of the thought fileds
+        # Get column indices of the target fields
         colIdcs: List[int] = []
         for fieldAlias in self._fieldAliases:
             colIdcs.append(np.where(dataFrame.values[0, :] == fieldAlias)[0][0])
