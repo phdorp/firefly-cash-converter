@@ -91,16 +91,26 @@ class TableDataLoader(DataLoader):
 
         return transactions
 
-    @abc.abstractmethod
     def _parseData(self, dataFrame: pd.DataFrame) -> List[data.Transaction]:
-        """Parse the data from the DataFrame.
+        """Parse the data from tabular data ``DataFrame``.
+
+        Locates the header row at ``self._headerRowIdx`` to determine the
+        column indices for the fields in ``self._fieldAliases`` and
+        returns a list of parsed ``data.Transaction`` objects.
 
         Args:
-            dataFrame (pd.DataFrame): The DataFrame to parse.
-        
+            dataFrame (pd.DataFrame): The spreadsheet data as a DataFrame.
+
         Returns:
-            List[data.Transaction]: Parsed transaction data.
+            List[data.Transaction]: Parsed transactions.
         """
+
+        # Get column indices of the target fields
+        colIdcs: List[int] = []
+        for fieldAlias in self._fieldAliases:
+            colIdcs.append(np.where(dataFrame.values[self._headerRowIdx, :] == fieldAlias)[0][0])
+
+        return self._getTransactions(dataFrame, colIdcs)
         
 class DataLoaderXlsx(TableDataLoader):
 
@@ -166,27 +176,6 @@ class DataLoaderPaypal(DataLoaderCsv):
         self._fieldFilters = [lambda content: content.replace('"', "") for _ in self._fieldFilters]
         # Convert German-formatted numbers (e.g., "1.234,56 €") to standard float format ("1234.56")
         self._fieldFilters[Fields.DEPOSIT] = lambda content: content.replace('"', "").replace(",", ".")
-
-    def _parseData(self, dataFrame: pd.DataFrame) -> List[data.Transaction]:
-        """Parse the data from a PayPal CSV-formatted DataFrame.
-
-        This method locates the PayPal CSV header row (as configured by
-        ``headerRowIdx``) to determine the column indices for the fields
-        listed in ``self._fieldAliases`` and returns the parsed
-        transactions.
-
-        Args:
-            dataFrame (pd.DataFrame): The CSV data as a DataFrame.
-
-        Returns:
-            List[data.Transaction]: Parsed transactions.
-        """
-        # Get column indices of the target fields
-        colIdcs: List[int] = []
-        for fieldAlias in self._fieldAliases:
-            colIdcs.append(np.where(dataFrame.values[self._headerRowIdx, :] == fieldAlias)[0][0])
-
-        return self._getTransactions(dataFrame, colIdcs)
     
 class DataLoaderBarclays(DataLoaderXlsx):
 
@@ -201,30 +190,18 @@ class DataLoaderBarclays(DataLoaderXlsx):
         self._fieldAliases = {"Beschreibung": Fields.DESCRIPTION, "Buchungsdatum": Fields.DATE, "Originalbetrag": Fields.DEPOSIT}
         # Convert German-formatted numbers (e.g., "1.234,56 €") to standard float format ("1234.56")
         self._fieldFilters[Fields.DEPOSIT] = lambda content: content.replace(".", "").replace(",", ".").replace(" €", "")  
-
-    def _parseData(self, dataFrame: pd.DataFrame) -> List[data.Transaction]:
-        """Parse the data from a Barclays Excel ``DataFrame``.
-
-        Locates the header row at ``self._headerRowIdx`` to determine the
-        column indices for the fields in ``self._fieldAliases`` and
-        returns a list of parsed ``data.Transaction`` objects.
+    
+class DataLoaderTr(DataLoaderCsv):
+    
+    def __init__(self, dataPath):
+        """Initialize a Trade Republic CSV loader.
 
         Args:
-            dataFrame (pd.DataFrame): The spreadsheet data as a DataFrame.
-
-        Returns:
-            List[data.Transaction]: Parsed transactions.
+            dataPath (str): Path to the Trade Republic CSV file.
         """
+        super().__init__(separator=';', headerRowIdx=0, dataPath=dataPath)
 
-        # Determine the column indices for the transaction fields
-        colIdcs: List[int] = []
-        for fieldAlias in self._fieldAliases:
-            fieldIdcs = np.where(dataFrame.values[self._headerRowIdx, :] == fieldAlias)[0]
-            if fieldIdcs.size == 1:
-                colIdcs.append(int(fieldIdcs))
-            else:
-                colIdcs.append(int(fieldIdcs[0]))
+        self._fieldAliases = {"Note": Fields.DESCRIPTION, "Date": Fields.DATE, "Value": Fields.DEPOSIT}
+        self._fieldFilters[Fields.DATE] = lambda content: ".".join(str(content).split("T")[0].split("-")[::-1])
 
-        return self._getTransactions(dataFrame, colIdcs)
-
-loaderMapping = {"barclays": DataLoaderBarclays, "paypal": DataLoaderPaypal}
+loaderMapping = {"barclays": DataLoaderBarclays, "paypal": DataLoaderPaypal, "trade_republic": DataLoaderTr}
