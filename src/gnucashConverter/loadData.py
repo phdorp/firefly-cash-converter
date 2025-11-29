@@ -92,8 +92,10 @@ class TableDataLoader(DataLoader):
 
                 if storedData is None:
                     transactionData[self._fieldNames[field]] = inputData
-                else:
+                elif isinstance(inputData, str) and isinstance(storedData, str):
                     transactionData[self._fieldNames[field]] += self._fieldMergeSep + inputData
+                else:
+                    raise ValueError(f"Cannot merge multiple values for non-string field {self._fieldNames[field]}")  
 
             # Only add the transaction if it contains data
             if len(transactionData) > 0:
