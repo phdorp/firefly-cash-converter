@@ -26,7 +26,7 @@ class DataLoader(abc.ABC):
         self._fieldNames: List[str] = [field.name for field in dc.fields(data.Transaction)]
         self._fieldTypes: List[type] = [str, str, float]
         self._fieldAliases: Dict[str, Fields] = {fieldName: Fields[fieldName.upper()] for fieldName in self._fieldNames}
-        self._fieldFilters: List[Callable] = [lambda content: content for fieldName in self._fieldNames]
+        self._fieldFilters: List[Callable[[str], str]] = [lambda content: content for _ in self._fieldNames]
 
     @abc.abstractmethod
     def load(self):
@@ -119,15 +119,14 @@ class DataLoaderPaypal(DataLoaderCsv):
             transactions.append(data.Transaction(**transactionData))
 
         return transactions
-
-
+    
 class DataLoaderBarclays(DataLoaderXlsx):
 
     def __init__(self, dataPath):
         super().__init__(dataPath)
 
         self._fieldAliases = {"Beschreibung": Fields.DESCRIPTION, "Buchungsdatum": Fields.DATE, "Originalbetrag": Fields.DEPOSIT}
-        self._fieldFilters[Fields.DEPOSIT] = lambda content: content.replace(",", ".").replace(" €", "")
+        self._fieldFilters[Fields.DEPOSIT] = lambda content: content.replace(".", "").replace(",", ".").replace(" €", "")
         self._headerRowIdx = 11
 
     def _parseData(self, dataFrame: pd.DataFrame) -> List[data.Transaction]:
