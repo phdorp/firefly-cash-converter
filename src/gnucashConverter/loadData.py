@@ -40,16 +40,13 @@ class TableDataLoader(DataLoader):
     def __init__(self, headerRowIdx: int, dataPath: str):
         self._headerRowIdx = headerRowIdx
         super().__init__(dataPath)
-    
-    def _getDataRow(self, dataFrame: pd.DataFrame, rowIdx: int) -> np.ndarray:
-        return dataFrame.values[rowIdx]
 
     def _getTransactions(self, dataFrame: pd.DataFrame, colIdcs: List[int]) -> List[data.Transaction]:
         # Parse the transactions from the DataFrame
         transactions: List[data.Transaction] = []
         for rowIdx in range(self._headerRowIdx + 1, dataFrame.shape[0]):
             # Create a dictionary to hold the current transaction data
-            row = self._getDataRow(dataFrame, rowIdx)
+            row = dataFrame.values[rowIdx]
             transactionData: Dict[str, Any] = {}
             for colIdx, fieldAlias in zip(colIdcs, self._fieldAliases):
                 field = self._fieldAliases[fieldAlias]
@@ -61,6 +58,17 @@ class TableDataLoader(DataLoader):
         
         return transactions
 
+    @abc.abstractmethod
+    def _parseData(self, dataFrame: pd.DataFrame) -> List[data.Transaction]:
+        """
+        Parse the data from the DataFrame.
+
+        Args:
+            dataFrame (pd.DataFrame): The DataFrame to parse.
+        
+        Returns:
+            List[data.Transaction]: Parsed transaction data.
+        """
 class DataLoaderXlsx(TableDataLoader):
 
     def __init__(self, headerRowIdx: int, dataPath: str):
@@ -74,31 +82,6 @@ class DataLoaderXlsx(TableDataLoader):
             pd.DataFrame: Data loaded from the Excel file.
         """
         self._data = self._parseData(pd.read_excel(self._dataPath))
-
-    @abc.abstractmethod
-    def _parseData(self, dataFrame: pd.DataFrame) -> List[data.Transaction]:
-        """
-        Parse the data from the DataFrame.
-
-        Args:
-            dataFrame (pd.DataFrame): The DataFrame to parse.
-
-        Returns:
-            List[data.Transaction]: Parsed transaction data.
-        """
-
-    @abc.abstractmethod
-    def _getDataRow(self, dataFrame: pd.DataFrame, rowIdx: int) -> np.ndarray:
-        """
-        Get the data row from the DataFrame.
-
-        Args:
-            dataFrame (pd.DataFrame): The DataFrame to get the row from.
-            rowIdx (int): The index of the row to get.
-
-        Returns:
-            np.ndarray: The data row.
-        """
 
 class DataLoaderCsv(TableDataLoader): 
     """
@@ -122,18 +105,6 @@ class DataLoaderCsv(TableDataLoader):
         """
         self._data = self._parseData(pd.read_csv(self._dataPath, sep=self._separator, header=None))
 
-    @abc.abstractmethod
-    def _parseData(self, dataFrame: pd.DataFrame) -> List[data.Transaction]:
-        """
-        Parse the data from the DataFrame.
-
-        Args:
-            dataFrame (pd.DataFrame): The DataFrame to parse.
-        
-        Returns:
-            List[data.Transaction]: Parsed transaction data.
-        """
-
 class DataLoaderPaypal(DataLoaderCsv):
 
     def __init__(self, dataPath):
@@ -143,9 +114,6 @@ class DataLoaderPaypal(DataLoaderCsv):
         self._fieldFilters = [lambda content: content.replace('"', "") for _ in self._fieldFilters]
         # Convert German-formatted numbers (e.g., "1.234,56 €") to standard float format ("1234.56")
         self._fieldFilters[Fields.DEPOSIT] = lambda content: content.replace('"', "").replace(",", ".")
-
-    def _getDataRow(self, dataFrame: pd.DataFrame, rowIdx: int) -> np.ndarray:
-        return dataFrame.values[rowIdx]
 
     def _parseData(self, dataFrame: pd.DataFrame) -> List[data.Transaction]:
         """
@@ -171,9 +139,6 @@ class DataLoaderBarclays(DataLoaderXlsx):
 
         self._fieldAliases = {"Beschreibung": Fields.DESCRIPTION, "Buchungsdatum": Fields.DATE, "Originalbetrag": Fields.DEPOSIT}
         self._fieldFilters[Fields.DEPOSIT] = lambda content: content.replace(",", ".").replace(" €", "")
-
-    def _getDataRow(self, dataFrame: pd.DataFrame, rowIdx: int) -> np.ndarray:
-        return dataFrame.values[rowIdx]
 
     def _parseData(self, dataFrame: pd.DataFrame) -> List[data.Transaction]:
         """
