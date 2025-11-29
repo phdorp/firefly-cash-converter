@@ -26,14 +26,25 @@ class DataLoader(abc.ABC):
         self._fieldNames: List[str] = [field.name for field in dc.fields(data.Transaction)]
         self._fieldTypes: List[type] = [str, str, float]
         self._fieldAliases: Dict[str, Fields] = {fieldName: Fields[fieldName.upper()] for fieldName in self._fieldNames}
-        self._fieldFilters: List[Callable] = [lambda content: content for fieldName in self._fieldNames]
+        self._fieldFilters: List[Callable[[str], str]] = [lambda content: content for _ in self._fieldNames]
 
     @abc.abstractmethod
     def load(self):
         pass
 
+class TableDataLoader(DataLoader):    
+    """
+    Base class for data loaders that operate on tabular data formats (e.g., CSV and Excel).
+    Introduces the headerRowIdx attribute to specify the index of the header row in the data file.
+    """
+    def __init__(self, headerRowIdx: int, dataPath: str):
+        self._headerRowIdx = headerRowIdx
+        super().__init__(dataPath)
 
-class DataLoaderXlsx(DataLoader):
+class DataLoaderXlsx(TableDataLoader):
+
+    def __init__(self, headerRowIdx: int, dataPath: str):
+        super().__init__(headerRowIdx, dataPath)
 
     def load(self):
         """
@@ -56,16 +67,49 @@ class DataLoaderXlsx(DataLoader):
             List[data.Transaction]: Parsed transaction data.
         """
 
+class DataLoaderCsv(TableDataLoader): 
+    """
+    Data loader for CSV files.
+    This class loads transaction data from a CSV file, using the specified separator and header row index.
+    Args:
+        separator (str): The delimiter used in the CSV file.
+        headerRowIdx (int): The index of the header row in the CSV file.
+        dataPath (str): Path to the CSV file to load.
+    """   
+    def __init__(self, separator: str, headerRowIdx: int, dataPath: str):
+        self._separator = separator
+        super().__init__(headerRowIdx, dataPath)
 
-class DataLoaderPaypal(DataLoaderXlsx):
+    def load(self):
+        """
+        Load data from a CSV file.
+
+        Returns:
+            pd.DataFrame: Data loaded from the CSV file.
+        """
+        self._data = self._parseData(pd.read_csv(self._dataPath, sep=self._separator, header=None))
+
+    @abc.abstractmethod
+    def _parseData(self, dataFrame: pd.DataFrame) -> List[data.Transaction]:
+        """
+        Parse the data from the DataFrame.
+
+        Args:
+            dataFrame (pd.DataFrame): The DataFrame to parse.
+        
+        Returns:
+            List[data.Transaction]: Parsed transaction data.
+        """
+
+class DataLoaderPaypal(DataLoaderCsv):
 
     def __init__(self, dataPath):
-        super().__init__(dataPath)
+        super().__init__(separator=',', headerRowIdx=0, dataPath=dataPath)
 
         self._fieldAliases = {"Beschreibung": Fields.DESCRIPTION, "Datum": Fields.DATE, "Brutto": Fields.DEPOSIT}
         self._fieldFilters = [lambda content: content.replace('"', "") for _ in self._fieldFilters]
+        # Convert German-formatted numbers (e.g., "1.234,56 €") to standard float format ("1234.56")
         self._fieldFilters[Fields.DEPOSIT] = lambda content: content.replace('"', "").replace(",", ".")
-        self._separator = ',"'
 
     def _parseData(self, dataFrame: pd.DataFrame) -> List[data.Transaction]:
         """
@@ -75,39 +119,32 @@ class DataLoaderPaypal(DataLoaderXlsx):
             dataFrame (pd.DataFrame): The DataFrame to parse.
 
         Returns:
-            acc.Account: Parsed account data.
+            List[data.Transaction]: Parsed account data.
         """
-
-        # Determine and filter field names in file and
-        fieldNamesFile = dataFrame.columns[0].split(self._separator)
-        fieldNamesFile = [name.replace('"', "") for name in fieldNamesFile]
-
-        # Get colum indices of the thought fileds
+        # Get column indices of the target fields
         colIdcs: List[int] = []
         for fieldAlias in self._fieldAliases:
-            colIdcs.append(fieldNamesFile.index(fieldAlias))
+            colIdcs.append(np.where(dataFrame.values[0, :] == fieldAlias)[0][0])
 
         # Create transactions from each row
         transactions: List[data.Transaction] = []
-        for row in dataFrame.values:
+        for rowIdx in range(self._headerRowIdx + 1, dataFrame.shape[0]):
             transactionData: Dict[str, Any] = {}
             for colIdx, fieldAlias in zip(colIdcs, self._fieldAliases):
                 field = self._fieldAliases[fieldAlias]
-                content = row[0].split(self._separator)[colIdx]
+                content = dataFrame.values[rowIdx, colIdx]
                 transactionData[self._fieldNames[field]] = self._fieldTypes[field](self._fieldFilters[field](content))
             transactions.append(data.Transaction(**transactionData))
 
         return transactions
-
-
+    
 class DataLoaderBarclays(DataLoaderXlsx):
 
     def __init__(self, dataPath):
-        super().__init__(dataPath)
+        super().__init__(headerRowIdx=11, dataPath=dataPath)
 
         self._fieldAliases = {"Beschreibung": Fields.DESCRIPTION, "Buchungsdatum": Fields.DATE, "Originalbetrag": Fields.DEPOSIT}
-        self._fieldFilters[Fields.DEPOSIT] = lambda content: content.replace(",", ".").replace(" €", "")
-        self._headerRowIdx = 11
+        self._fieldFilters[Fields.DEPOSIT] = lambda content: content.replace(".", "").replace(",", ".").replace(" €", "")
 
     def _parseData(self, dataFrame: pd.DataFrame) -> List[data.Transaction]:
         """
