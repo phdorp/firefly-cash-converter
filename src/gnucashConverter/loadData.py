@@ -13,17 +13,18 @@ class Fields(enum.IntEnum):
     DESCRIPTION = 0
     DATE = 1
     DEPOSIT = 2
+    ACCOUNTNAME = 3
 
 
 class DataLoader(abc.ABC):
     @property
-    def data(self) -> List[data.Transaction]:
+    def transactions(self) -> List[data.Transaction]:
         """Return the list of parsed transactions.
 
         Returns:
             List[data.Transaction]: Currently-loaded transactions.
         """
-        return self._data
+        return self._transactions
 
     def __init__(self, dataPath: str):
         """Initialize the data loader with the path to the data file.
@@ -32,12 +33,12 @@ class DataLoader(abc.ABC):
             dataPath (str): Filesystem path to the data file to be loaded.
         """
         self._dataPath = dataPath
-        self._data: List[data.Transaction] = []
+        self._transactions: List[data.Transaction] = []
         self._fieldNames: List[str] = [field.name for field in dc.fields(data.Transaction)]
-        self._fieldTypes: List[type] = [str, str, float]
+        self._fieldTypes: List[type] = [field.type for field in dc.fields(data.Transaction)]
         self._fieldAliases: Dict[str, Fields] = {fieldName: Fields[fieldName.upper()] for fieldName in self._fieldNames}
         self._fieldFilters: List[Callable[[str], str]] = [lambda content: content for _ in self._fieldNames]
-        self._fieldMergeSep = ", "  # Separator used when merging multiple entries into one field
+        self._fieldMergeSep = " - "  # Separator used when merging multiple entries into one field
 
     @abc.abstractmethod
     def load(self):
@@ -63,8 +64,24 @@ class TableDataLoader(DataLoader):
                 data (used to locate column names).
             dataPath (str): Path to the source data file.
         """
-        self._headerRowIdx = headerRowIdx
         super().__init__(dataPath)
+        self._headerRowIdx = headerRowIdx
+        self._fieldFilters[Fields.DESCRIPTION] = self._descriptionFilter  # Remove NaN descriptions
+
+    @staticmethod
+    def _descriptionFilter(content: str) -> str:
+        """Filter function to clean up description fields.
+
+        Args:
+            content (str): Raw description content.
+
+        Returns:
+            str: Cleaned description.
+        """
+        if pd.isna(content):
+            return ''
+
+        return content.replace(",", ";")
 
     def _getTransactions(self, dataFrame: pd.DataFrame, colIdcs: List[int]) -> List[data.Transaction]:
         """Extract transactions from a tabular DataFrame using resolved column indices.
@@ -93,9 +110,10 @@ class TableDataLoader(DataLoader):
                 if storedData is None:
                     transactionData[self._fieldNames[field]] = inputData
                 elif isinstance(inputData, str) and isinstance(storedData, str):
-                    transactionData[self._fieldNames[field]] += self._fieldMergeSep + inputData
+                    if inputData != "":
+                        transactionData[self._fieldNames[field]] += self._fieldMergeSep + inputData
                 else:
-                    raise ValueError(f"Cannot merge multiple values for non-string field {self._fieldNames[field]}")  
+                    raise ValueError(f"Cannot merge multiple values for non-string field {self._fieldNames[field]}")
 
             # Only add the transaction if it contains data
             if len(transactionData) > 0:
@@ -137,13 +155,13 @@ class DataLoaderXlsx(TableDataLoader):
         super().__init__(headerRowIdx, dataPath)
 
     def load(self):
-        """Load data from an Excel file and populate ``self._data``.
+        """Load data from an Excel file and populate ``self._transactions``.
 
         This method reads the Excel file at ``self._dataPath`` and calls
         ``_parseData`` to convert the loaded ``DataFrame`` into
-        ``data.Transaction`` objects which are stored in ``self._data``.
+        ``data.Transaction`` objects which are stored in ``self._transactions``.
         """
-        self._data = self._parseData(pd.read_excel(self._dataPath))
+        self._transactions = self._parseData(pd.read_excel(self._dataPath))
 
 
 class DataLoaderCsv(TableDataLoader):
@@ -168,14 +186,14 @@ class DataLoaderCsv(TableDataLoader):
         super().__init__(headerRowIdx, dataPath)
 
     def load(self):
-        """Load data from a CSV file and populate ``self._data``.
+        """Load data from a CSV file and populate ``self._transactions``.
 
         Reads the CSV at ``self._dataPath`` using the configured
         ``self._separator`` and passes the resulting ``DataFrame`` to
         ``_parseData``. The parsed transactions are stored in
-        ``self._data``.
+        ``self._transactions``.
         """
-        self._data = self._parseData(pd.read_csv(self._dataPath, sep=self._separator, header=None))
+        self._transactions = self._parseData(pd.read_csv(self._dataPath, sep=self._separator, header=None))
 
 
 class DataLoaderPaypal(DataLoaderCsv):
@@ -195,10 +213,9 @@ class DataLoaderPaypal(DataLoaderCsv):
             "Datum": Fields.DATE,
             "Brutto": Fields.DEPOSIT,
         }
-        self._fieldFilters = [lambda content: content.replace('"', "") for _ in self._fieldFilters]
         # Convert German-formatted numbers (e.g., "1.234,56 €") to standard float format ("1234.56")
         self._fieldFilters[Fields.DEPOSIT] = lambda content: content.replace('"', "").replace(",", ".")
-
+        self._fieldFilters[Fields.DATE] = lambda content: "-".join(str(content).split("T")[0].split(".")[::-1])
 
 class DataLoaderBarclays(DataLoaderXlsx):
 
@@ -220,6 +237,7 @@ class DataLoaderBarclays(DataLoaderXlsx):
         self._fieldFilters[Fields.DEPOSIT] = (
             lambda content: content.replace(".", "").replace(",", ".").replace(" €", "")
         )
+        self._fieldFilters[Fields.DATE] = lambda content: "-".join(str(content).split(".")[::-1])
 
 
 class DataLoaderTr(DataLoaderCsv):
@@ -238,7 +256,11 @@ class DataLoaderTr(DataLoaderCsv):
             "Date": Fields.DATE,
             "Value": Fields.DEPOSIT,
         }
-        self._fieldFilters[Fields.DATE] = lambda content: ".".join(str(content).split("T")[0].split("-")[::-1])
+        self._fieldFilters[Fields.DATE] = lambda content: str(content).split("T")[0]
 
 
-loaderMapping = {"barclays": DataLoaderBarclays, "paypal": DataLoaderPaypal, "trade_republic": DataLoaderTr}
+loaderMapping: dict[str, type[DataLoader]] = {
+    "barclays": DataLoaderBarclays,
+    "paypal": DataLoaderPaypal,
+    "trade_republic": DataLoaderTr,
+}
