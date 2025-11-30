@@ -35,7 +35,7 @@ class DataLoader(abc.ABC):
         self._dataPath = dataPath
         self._transactions: List[data.Transaction] = []
         self._fieldNames: List[str] = [field.name for field in dc.fields(data.Transaction)]
-        self._fieldTypes: List[type] = [str, str, float]
+        self._fieldTypes: List[type] = [field.type for field in dc.fields(data.Transaction)]
         self._fieldAliases: Dict[str, Fields] = {fieldName: Fields[fieldName.upper()] for fieldName in self._fieldNames}
         self._fieldFilters: List[Callable[[str], str]] = [lambda content: content for _ in self._fieldNames]
         self._fieldMergeSep = " - "  # Separator used when merging multiple entries into one field
@@ -82,7 +82,7 @@ class TableDataLoader(DataLoader):
             return ''
 
         return content.replace(",", ";")
-    
+
     def _getTransactions(self, dataFrame: pd.DataFrame, colIdcs: List[int]) -> List[data.Transaction]:
         """Extract transactions from a tabular DataFrame using resolved column indices.
 
@@ -155,11 +155,11 @@ class DataLoaderXlsx(TableDataLoader):
         super().__init__(headerRowIdx, dataPath)
 
     def load(self):
-        """Load data from an Excel file and populate ``self._data``.
+        """Load data from an Excel file and populate ``self._transactions``.
 
         This method reads the Excel file at ``self._dataPath`` and calls
         ``_parseData`` to convert the loaded ``DataFrame`` into
-        ``data.Transaction`` objects which are stored in ``self._data``.
+        ``data.Transaction`` objects which are stored in ``self._transactions``.
         """
         self._transactions = self._parseData(pd.read_excel(self._dataPath))
 
@@ -186,12 +186,12 @@ class DataLoaderCsv(TableDataLoader):
         super().__init__(headerRowIdx, dataPath)
 
     def load(self):
-        """Load data from a CSV file and populate ``self._data``.
+        """Load data from a CSV file and populate ``self._transactions``.
 
         Reads the CSV at ``self._dataPath`` using the configured
         ``self._separator`` and passes the resulting ``DataFrame`` to
         ``_parseData``. The parsed transactions are stored in
-        ``self._data``.
+        ``self._transactions``.
         """
         self._transactions = self._parseData(pd.read_csv(self._dataPath, sep=self._separator, header=None))
 
@@ -213,7 +213,6 @@ class DataLoaderPaypal(DataLoaderCsv):
             "Datum": Fields.DATE,
             "Brutto": Fields.DEPOSIT,
         }
-        # self._fieldFilters = [lambda content: content.replace('"', "") for _ in self._fieldFilters]
         # Convert German-formatted numbers (e.g., "1.234,56 €") to standard float format ("1234.56")
         self._fieldFilters[Fields.DEPOSIT] = lambda content: content.replace('"', "").replace(",", ".")
         self._fieldFilters[Fields.DATE] = lambda content: "-".join(str(content).split("T")[0].split(".")[::-1])
@@ -260,7 +259,7 @@ class DataLoaderTr(DataLoaderCsv):
         self._fieldFilters[Fields.DATE] = lambda content: str(content).split("T")[0]
 
 
-loaderMapping: dict[str, DataLoader] = {
+loaderMapping: dict[str, type[DataLoader]] = {
     "barclays": DataLoaderBarclays,
     "paypal": DataLoaderPaypal,
     "trade_republic": DataLoaderTr,

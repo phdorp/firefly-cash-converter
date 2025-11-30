@@ -15,7 +15,7 @@ class ConvertData:
             List[data.Transaction]: Currently-loaded transactions.
         """
         return self._transactions
-    
+
     def __init__(self, data: List[data.Transaction], accountMap: dict[str, str] = None):
         self._transactions = data
         self._unmappedAccountName = "Imbalance-EUR"
@@ -26,7 +26,7 @@ class ConvertData:
             if re.search(descriptionPattern, description):
                 return accountName
         return self._unmappedAccountName
-    
+
     def assignAccounts(self) -> None:
         for transaction in self._transactions:
             transaction.AccountName = self._findAccountName(transaction.Description)
