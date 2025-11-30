@@ -1,3 +1,3 @@
-﻿"Datum","Uhrzeit","Zeitzone","Beschreibung","Währung","Brutto","Entgelt","Netto","Guthaben","Transaktionscode","Absender E-Mail-Adresse","Name","Name der Bank","Bankkonto","Versand- und Bearbeitungsgebühr","Umsatzsteuer","Rechnungsnummer","Zugehöriger Transaktionscode"
-"04.07.2025","21:34:24","Europe/Berlin","Handyzahlung","EUR","60,00","0,00","60,00","126,00","8SB179","rf@gmx.net","asdf","","","0,00","0,00","",""
-"04.07.2025","22:27:43","Europe/Berlin","Handyzahlung","EUR","-3,00","0,00","-3,00","123,00","6WS75","de@gmail.com","pbfd","","","0,00","0,00","",""
+﻿Datum,Uhrzeit,Zeitzone,Beschreibung,Währung,Brutto,Entgelt,Netto,Guthaben,Transaktionscode,Absender E-Mail-Adresse,Name,Name der Bank,Bankkonto,Versand- und Bearbeitungsgebühr,Umsatzsteuer,Rechnungsnummer,Zugehöriger Transaktionscode
+04.07.2025,21:34:24,Europe/Berlin,"Handyzahlung, asdf",EUR,"60,00","0,00","60,00","126,00",8SB179,rf@gmx.net,asdf,,,"0,00","0,00",,
+04.07.2025,22:27:43,Europe/Berlin,Handyzahlung,EUR,"-3,00","0,00","-3,00","123,00",6WS75,,pbfd,,,"0,00","0,00",,
