@@ -27,11 +27,10 @@ def main():
     arguments = parser.parse_args()
 
     loader: ldb.DataLoader = ldb.loaderMapping[arguments.source](arguments.input_file)
-    loader.load()
 
     try:
         accountMap = toml.load(arguments.account_map) if arguments.account_map else None
-        converter = cdt.ConvertData(loader.transactions, accountMap)
+        converter = cdt.ConvertData(loader.load(), accountMap)
         converter.assignAccounts()
         converter.saveCsv(arguments.output_file)
     except Exception as e:

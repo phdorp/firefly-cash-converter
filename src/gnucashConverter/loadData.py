@@ -41,12 +41,15 @@ class DataLoader(abc.ABC):
         self._fieldMergeSep = " - "  # Separator used when merging multiple entries into one field
 
     @abc.abstractmethod
-    def load(self):
+    def load(self)-> List[data.Transaction]:
         """Load and parse data from the source file into `self._data`.
 
         Implementations should populate `self._data` with a list of
         `data.Transaction` instances parsed from the file located at
         `self._dataPath`.
+
+        Returns:
+            List[data.Transaction]: Parsed transactions.
         """
 
 
@@ -154,14 +157,17 @@ class DataLoaderXlsx(TableDataLoader):
         """
         super().__init__(headerRowIdx, dataPath)
 
-    def load(self):
+    def load(self) -> List[data.Transaction]:
         """Load data from an Excel file and populate ``self._transactions``.
 
         This method reads the Excel file at ``self._dataPath`` and calls
         ``_parseData`` to convert the loaded ``DataFrame`` into
         ``data.Transaction`` objects which are stored in ``self._transactions``.
+
+        Returns:
+            List[data.Transaction]: Parsed transactions.
         """
-        self._transactions = self._parseData(pd.read_excel(self._dataPath))
+        return self._parseData(pd.read_excel(self._dataPath))
 
 
 class DataLoaderCsv(TableDataLoader):
@@ -185,15 +191,18 @@ class DataLoaderCsv(TableDataLoader):
         self._separator = separator
         super().__init__(headerRowIdx, dataPath)
 
-    def load(self):
+    def load(self) -> List[data.Transaction]:
         """Load data from a CSV file and populate ``self._transactions``.
 
         Reads the CSV at ``self._dataPath`` using the configured
         ``self._separator`` and passes the resulting ``DataFrame`` to
         ``_parseData``. The parsed transactions are stored in
         ``self._transactions``.
+
+        Returns:
+            List[data.Transaction]: Parsed transactions.
         """
-        self._transactions = self._parseData(pd.read_csv(self._dataPath, sep=self._separator, header=None))
+        return self._parseData(pd.read_csv(self._dataPath, sep=self._separator, header=None))
 
 
 class DataLoaderPaypal(DataLoaderCsv):
