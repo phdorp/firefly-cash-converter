@@ -188,3 +188,90 @@ class PayloadFactory:
             payload["group_title"] = group_title
 
         return payload
+
+    def postAccount(
+        self,
+        name: str,
+        type: str,
+        iban: Optional[str] = None,
+        bic: Optional[str] = None,
+        account_number: Optional[str] = None,
+        opening_balance: Optional[str] = None,
+        opening_balance_date: Optional[str] = None,
+        virtual_balance: Optional[str] = None,
+        currency_id: Optional[str] = None,
+        currency_code: Optional[str] = None,
+        active: Optional[bool] = None,
+        order: Optional[int] = None,
+        include_net_worth: Optional[bool] = None,
+        account_role: Optional[str] = None,
+        credit_card_type: Optional[str] = None,
+        monthly_payment_date: Optional[str] = None,
+        liability_type: Optional[str] = None,
+        liability_direction: Optional[str] = None,
+        interest: Optional[str] = None,
+        interest_period: Optional[str] = None,
+        notes: Optional[str] = None,
+        latitude: Optional[float] = None,
+        longitude: Optional[float] = None,
+        zoom_level: Optional[int] = None,
+    ) -> dict[str, Any]:
+        """
+        Build an account payload for the Firefly III API (storeAccount).
+        """
+        payload: dict[str, Any] = {
+            "name": name,
+            "type": type,
+        }
+
+        if iban:
+            payload["iban"] = iban
+        if bic:
+            payload["bic"] = bic
+        if account_number:
+            payload["account_number"] = account_number
+        if opening_balance:
+            payload["opening_balance"] = opening_balance
+        if opening_balance_date:
+            payload["opening_balance_date"] = opening_balance_date
+        if virtual_balance:
+            payload["virtual_balance"] = virtual_balance
+
+        if currency_id:
+            payload["currency_id"] = currency_id
+        if currency_code:
+            payload["currency_code"] = currency_code
+
+        if active is not None:
+            payload["active"] = active
+        if order is not None:
+            payload["order"] = order
+        if include_net_worth is not None:
+            payload["include_net_worth"] = include_net_worth
+
+        if account_role:
+            payload["account_role"] = account_role
+        if credit_card_type:
+            payload["credit_card_type"] = credit_card_type
+        if monthly_payment_date:
+            payload["monthly_payment_date"] = monthly_payment_date
+
+        if liability_type:
+            payload["liability_type"] = liability_type
+        if liability_direction:
+            payload["liability_direction"] = liability_direction
+        if interest:
+            payload["interest"] = interest
+        if interest_period:
+            payload["interest_period"] = interest_period
+
+        if notes:
+            payload["notes"] = notes
+        if latitude is not None:
+            payload["latitude"] = latitude
+        if longitude is not None:
+            payload["longitude"] = longitude
+        if zoom_level is not None:
+            payload["zoom_level"] = zoom_level
+
+        return payload
