@@ -22,7 +22,6 @@ class PayloadFactory:
             currency_code="EUR",
         )
 
-
     def postTransaction(
         self,
         type: str,
@@ -70,7 +69,7 @@ class PayloadFactory:
         group_title: Optional[str] = None,
         error_if_duplicate_hash: bool = False,
         apply_rules: bool = False,
-        fire_webhooks: bool = True
+        fire_webhooks: bool = True,
     ) -> dict[str, Any]:
         """
         Build a transaction payload for the Firefly III API.
@@ -275,3 +274,26 @@ class PayloadFactory:
             payload["zoom_level"] = zoom_level
 
         return payload
+
+    def getAccounts(
+        self,
+        limit: Optional[int] = None,
+        page: Optional[int] = None,
+        account_type: Optional[str] = None,
+        date: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """
+        Build query parameters for listing accounts (GET /v1/accounts).
+        """
+        params: dict[str, Any] = {}
+
+        if limit is not None:
+            params["limit"] = limit
+        if page is not None:
+            params["page"] = page
+        if account_type:
+            params["type"] = account_type
+        if date:
+            params["date"] = date
+
+        return params
