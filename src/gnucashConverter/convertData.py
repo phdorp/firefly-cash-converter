@@ -16,7 +16,8 @@ class ConvertData:
         """
         return self._transactions
 
-    def __init__(self, data: List[data.Transaction], accountMap: dict[str, str] = None):
+    def __init__(self, currentAccount: str, data: List[data.Transaction], accountMap: dict[str, str] = None):
+        self._currentAccount = currentAccount
         self._transactions = data
         self._unmappedAccountName = "Imbalance-EUR"
         self._accountMap = accountMap if accountMap is not None else {}
@@ -31,13 +32,11 @@ class ConvertData:
         for transaction in self._transactions:
             accountName = self._findAccountName(transaction.Description)
             if transaction.Deposit < 0:
-                transaction.SourceAccountName = accountName
-                if not transaction.DestinationAccountName:
-                    transaction.DestinationAccountName = self._unmappedAccountName
+                transaction.SourceAccount = self._currentAccount
+                transaction.DestinationAccount = accountName
             else:
-                transaction.DestinationAccountName = accountName
-                if not transaction.SourceAccountName:
-                    transaction.SourceAccountName = self._unmappedAccountName
+                transaction.DestinationAccount = self._currentAccount
+                transaction.SourceAccount = accountName
 
     def _convert(self) -> pd.DataFrame:
         # Placeholder for conversion logic

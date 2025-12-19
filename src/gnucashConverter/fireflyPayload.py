@@ -9,8 +9,8 @@ class PayloadFactory:
 
     def toPayload(self, transaction: data.Transaction) -> dict[str, Any]:
         isWithdrawal = transaction.Deposit < 0
-        sourceName = transaction.SourceAccountName or None
-        destinationName = transaction.DestinationAccountName or None
+        sourceName = transaction.SourceAccount or None
+        destinationName = transaction.DestinationAccount or None
 
         return self.postTransaction(
             type="withdrawal" if isWithdrawal else "deposit",
