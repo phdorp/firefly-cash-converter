@@ -12,11 +12,12 @@ class FireflyInterface:
 
     Notes:
     - This class expects a Firefly III API token with permission to create transactions.
-    - Provide `account_map` as a mapping from the `AccountName` values used in
-      `data.Transaction` to Firefly account IDs (integers).
-    - For each transaction we create two sides: the mapped account and the
-      balancing account (provided as `default_balance_account_id`). The amounts
-      are opposite to keep transactions balanced.
+        - Provide `account_map` as a mapping from the account values used in
+            `data.Transaction` (``SourceAccountName`` / ``DestinationAccountName``)
+            to Firefly account IDs (integers).
+        - For each transaction we create two sides: the mapped account and the
+            balancing account (provided as `default_balance_account_id`). The amounts
+            are opposite to keep transactions balanced.
     """
 
     def __init__(

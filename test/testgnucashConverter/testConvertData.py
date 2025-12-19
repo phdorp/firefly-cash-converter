@@ -23,8 +23,8 @@ class TestConvertData(unittest.TestCase):
         Test the assignAccounts method of ConvertData to ensure transactions are assigned the correct account names based on the account map.
         """
 
-        self.assertIs(self._converter.transactions[0].AccountName, "Expenses:Shopping")
-        self.assertIs(self._converter.transactions[1].AccountName, "Expenses:Misc")
+        self.assertIs(self._converter.transactions[0].SourceAccountName, "Expenses:Shopping")
+        self.assertIs(self._converter.transactions[1].SourceAccountName, "Expenses:Misc")
 
 
 if __name__ == "__main__":

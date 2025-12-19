@@ -29,7 +29,15 @@ class ConvertData:
 
     def assignAccounts(self) -> None:
         for transaction in self._transactions:
-            transaction.AccountName = self._findAccountName(transaction.Description)
+            accountName = self._findAccountName(transaction.Description)
+            if transaction.Deposit < 0:
+                transaction.SourceAccountName = accountName
+                if not transaction.DestinationAccountName:
+                    transaction.DestinationAccountName = self._unmappedAccountName
+            else:
+                transaction.DestinationAccountName = accountName
+                if not transaction.SourceAccountName:
+                    transaction.SourceAccountName = self._unmappedAccountName
 
     def _convert(self) -> pd.DataFrame:
         # Placeholder for conversion logic

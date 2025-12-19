@@ -13,7 +13,8 @@ class Fields(enum.IntEnum):
     DESCRIPTION = 0
     DATE = 1
     DEPOSIT = 2
-    ACCOUNTNAME = 3
+    SOURCE_ACCOUNT = 3
+    DESTINATION_ACCOUNT = 4
 
 
 class DataLoader(abc.ABC):
@@ -36,7 +37,8 @@ class DataLoader(abc.ABC):
         self._transactions: List[data.Transaction] = []
         self._fieldNames: List[str] = [field.name for field in dc.fields(data.Transaction)]
         self._fieldTypes: List[type] = [field.type for field in dc.fields(data.Transaction)]
-        self._fieldAliases: Dict[str, Fields] = {fieldName: Fields[fieldName.upper()] for fieldName in self._fieldNames}
+        mandatoryFields = ["Description", "Date", "Deposit"]
+        self._fieldAliases: Dict[str, Fields] = {fieldName: Fields[fieldName.upper()] for fieldName in mandatoryFields}
         self._fieldFilters: List[Callable[[str], str]] = [lambda content: content for _ in self._fieldNames]
         self._fieldMergeSep = " - "  # Separator used when merging multiple entries into one field
 

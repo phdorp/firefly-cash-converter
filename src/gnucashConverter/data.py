@@ -6,4 +6,5 @@ class Transaction:
     Description: str
     Date: str
     Deposit: float
-    AccountName: str = ""  # Optional field for account name
+    SourceAccountName: str = ""  # Account funds come from (for withdrawals)
+    DestinationAccountName: str = ""  # Account funds go to (for deposits)

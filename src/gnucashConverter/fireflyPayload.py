@@ -8,13 +8,17 @@ class PayloadFactory:
         self._format = format.lower()
 
     def toPayload(self, transaction: data.Transaction) -> dict[str, Any]:
+        isWithdrawal = transaction.Deposit < 0
+        sourceName = transaction.SourceAccountName or None
+        destinationName = transaction.DestinationAccountName or None
+
         return self.postTransaction(
-            type="withdrawal" if transaction.Deposit < 0 else "deposit",
+            type="withdrawal" if isWithdrawal else "deposit",
             date=transaction.Date,
             amount=str(abs(transaction.Deposit)),
             description=transaction.Description,
-            destination_name=transaction.AccountName if transaction.Deposit > 0 else None,
-            source_name=transaction.AccountName if transaction.Deposit < 0 else None,
+            source_name=sourceName,
+            destination_name=destinationName,
             currency_code="EUR",
         )
 
