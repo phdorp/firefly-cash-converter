@@ -1,16 +1,33 @@
-from typing import Optional, Any
+from typing import Optional, Any, Union, Dict, Callable, overload
+import dataclasses as dc
 
-from gnucashConverter import data
+from gnucashConverter.data import Transaction, PostAccount, PostAssetAccount
 
 
 class PayloadFactory:
     def __init__(self, format: str = "json") -> None:
         self._format = format.lower()
+        self._toPayload: Dict[Any, Callable] = {
+            Transaction: self._toTransactionPayload,
+            PostAssetAccount: self._toAccountPayload,
+            PostAccount: self._toAccountPayload,
+        }
 
-    def toPayload(self, transaction: data.Transaction) -> dict[str, Any]:
+    @overload
+    def toPayload(self, data: Transaction) -> dict[str, Any]:
+        pass
+
+    @overload
+    def toPayload(self, data: PostAccount) -> dict[str, Any]:
+        pass
+
+    def toPayload(self, data: Union[Transaction, PostAccount]) -> dict[str, Any]:
+        return self._toPayload[type(data)](data)
+
+    def _toTransactionPayload(self, transaction: Transaction) -> dict[str, Any]:
         isWithdrawal = transaction.Deposit < 0
-        sourceName = transaction.SourceAccount or None
-        destinationName = transaction.DestinationAccount or None
+        sourceName = transaction.SourceAccountName or None
+        destinationName = transaction.DestinationAccountName or None
 
         return self.postTransaction(
             type="withdrawal" if isWithdrawal else "deposit",
@@ -21,6 +38,9 @@ class PayloadFactory:
             destination_name=destinationName,
             currency_code="EUR",
         )
+
+    def _toAccountPayload(self, account: PostAccount) -> dict[str, Any]:
+        return self.postAccount(**account.__dict__)
 
     def postTransaction(
         self,
@@ -192,6 +212,7 @@ class PayloadFactory:
         self,
         name: str,
         type: str,
+        account_role: str,
         iban: Optional[str] = None,
         bic: Optional[str] = None,
         account_number: Optional[str] = None,
@@ -203,7 +224,6 @@ class PayloadFactory:
         active: Optional[bool] = None,
         order: Optional[int] = None,
         include_net_worth: Optional[bool] = None,
-        account_role: Optional[str] = None,
         credit_card_type: Optional[str] = None,
         monthly_payment_date: Optional[str] = None,
         liability_type: Optional[str] = None,

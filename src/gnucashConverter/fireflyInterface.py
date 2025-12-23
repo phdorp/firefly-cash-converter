@@ -40,6 +40,61 @@ class FireflyInterface:
             }
         )
 
+    def _postTransaction(self, transaction: data.Transaction) -> requests.Response:
+        payload = self._payloadFactory.toPayload(transaction)
+        url = f"{self._api_url}/transactions"
+        resp = self._session.post(url, json=payload)
+        resp.raise_for_status()
+        return resp
+
+    def getAccounts(self) -> List[data.GetAccount]:
+        """Retrieve the list of accounts from the Firefly III server.
+
+        Returns:
+            List of account dictionaries as returned by the Firefly API.
+        """
+        url = f"{self._api_url}/accounts"
+        response = self._session.get(url)
+        response.raise_for_status()
+        accountResponses: Dict = response.json().get("data", [])
+
+        accounts: List[data.GetAccount] = []
+        for response in accountResponses:
+            accountData = response.get("attributes", {})
+            accountData["id"] = response.get("id")
+            accounts.append(data.GetAccount(**accountData))
+        return accounts
+
+    def createAccount(self, account: data.PostAccount) -> requests.Response:
+        """Create a new account on the Firefly III server.
+
+        Args:
+            name: Name of the new account.
+            account_type: Type of the account (default: "asset").
+
+        Returns:
+            The `requests.Response` from the Firefly API.
+        """
+        url = f"{self._api_url}/accounts"
+        payload = self._payloadFactory.toPayload(account)
+        resp = self._session.post(url, json=payload)
+        resp.raise_for_status()
+        return resp
+
+    def deleteAccount(self, account_id: str) -> requests.Response:
+        """Delete an account on the Firefly III server.
+
+        Args:
+            account_id: The Firefly account id to delete.
+
+        Returns:
+            The `requests.Response` from the Firefly API.
+        """
+        url = f"{self._api_url}/accounts/{account_id}"
+        resp = self._session.delete(url)
+        resp.raise_for_status()
+        return resp
+
     def createTransaction(self, transaction: data.Transaction) -> requests.Response:
         """Create a single transaction on the Firefly III server.
 
@@ -52,8 +107,6 @@ class FireflyInterface:
         Returns:
             The `requests.Response` from the Firefly API.
         """
-        payload = self._payloadFactory.toPayload(transaction)
-        url = f"{self._api_url}/transactions"
-        resp = self._session.post(url, json=payload)
-        resp.raise_for_status()
-        return resp
+        accounts = self.getAccounts()
+        transaction.SourceAccountName
+        return self._postTransaction(transaction)
