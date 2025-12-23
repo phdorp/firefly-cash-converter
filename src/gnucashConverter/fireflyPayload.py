@@ -25,15 +25,15 @@ class PayloadFactory:
         return self._toPayload[type(data)](data)
 
     def _toTransactionPayload(self, transaction: Transaction) -> dict[str, Any]:
-        isWithdrawal = transaction.Deposit < 0
-        sourceName = transaction.SourceAccountName or None
-        destinationName = transaction.DestinationAccountName or None
+        isWithdrawal = transaction.amount < 0
+        sourceName = transaction.source_name or None
+        destinationName = transaction.destination_name or None
 
         return self.postTransaction(
             type="withdrawal" if isWithdrawal else "deposit",
-            date=transaction.Date,
-            amount=str(abs(transaction.Deposit)),
-            description=transaction.Description,
+            date=transaction.date,
+            amount=str(abs(transaction.amount)),
+            description=transaction.description,
             source_name=sourceName,
             destination_name=destinationName,
             currency_code="EUR",

@@ -30,13 +30,13 @@ class ConvertData:
 
     def assignAccounts(self) -> None:
         for transaction in self._transactions:
-            accountName = self._findAccountName(transaction.Description)
-            if transaction.Deposit < 0:
-                transaction.SourceAccount = self._currentAccount
-                transaction.DestinationAccount = accountName
+            accountName = self._findAccountName(transaction.description)
+            if transaction.amount < 0:
+                transaction.source_name = self._currentAccount
+                transaction.destination_name = accountName
             else:
-                transaction.DestinationAccount = self._currentAccount
-                transaction.SourceAccount = accountName
+                transaction.destination_name = self._currentAccount
+                transaction.source_name = accountName
 
     def _convert(self) -> pd.DataFrame:
         # Placeholder for conversion logic

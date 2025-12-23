@@ -16,8 +16,8 @@ class TestFireflyInterface(unittest.TestCase):
     def testCreateTransactions(self):
         # Prepare two transactions
         transactions = [
-            data.Transaction(Date="2025-05-30", Deposit=-1619.25, Description="Test1", SourceAccount="Expenses:Shopping", DestinationAccount="Assets:Current"),
-            data.Transaction(Date="2024-05-30", Deposit=-13.32, Description="Test2", SourceAccount="Expenses:Misc", DestinationAccount="Assets:Current"),
+            data.Transaction(date="2025-05-30", amount=-1619.25, description="Test1", source_name="Expenses:Shopping", destination_name="Assets:Current"),
+            data.Transaction(date="2024-05-30", amount=-13.32, description="Test2", source_name="Expenses:Misc", destination_name="Assets:Current"),
         ]
 
         # Mock the session.post method to capture calls and return a fake response
@@ -49,7 +49,7 @@ class TestFireflyInterface(unittest.TestCase):
         # The first transaction should be a withdrawal with source_name matching the account name
         transactionData = payload["transactions"][0]
         self.assertEqual(transactionData["type"], "withdrawal")
-        self.assertEqual(transactionData["source_name"], transactions[0].SourceAccount)
+        self.assertEqual(transactionData["source_name"], transactions[0].source_name)
         self.assertEqual(transactionData["amount"], "1619.25")
         self.assertEqual(transactionData["description"], "Test1")
         self.assertEqual(transactionData["date"], "2025-05-30")

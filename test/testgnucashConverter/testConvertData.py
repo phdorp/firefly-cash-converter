@@ -10,8 +10,8 @@ class TestConvertData(unittest.TestCase):
         self._converter = cvd.ConvertData(
             self._currentAccount,
             [
-                data.Transaction(Date="30.05.2025", Deposit=-1619.25, Description="Test1, Test2Händler"),
-                data.Transaction(Date="30.05.2024", Deposit=-13.32, Description="Test2, Test1h"),
+                data.Transaction(date="30.05.2025", amount=-1619.25, description="Test1, Test2Händler"),
+                data.Transaction(date="30.05.2024", amount=-13.32, description="Test2, Test1h"),
             ],
             accountMap={
                 "Expenses:Shopping": "Händler",
@@ -24,10 +24,10 @@ class TestConvertData(unittest.TestCase):
         """
         Test the assignAccounts method of ConvertData to ensure transactions are assigned the correct account names based on the account map.
         """
-        self.assertIs(self._converter.transactions[0].SourceAccount, self._currentAccount)
-        self.assertIs(self._converter.transactions[0].DestinationAccount, "Expenses:Shopping")
-        self.assertIs(self._converter.transactions[1].SourceAccount, self._currentAccount)
-        self.assertIs(self._converter.transactions[1].DestinationAccount, "Expenses:Misc")
+        self.assertIs(self._converter.transactions[0].source_name, self._currentAccount)
+        self.assertIs(self._converter.transactions[0].destination_name, "Expenses:Shopping")
+        self.assertIs(self._converter.transactions[1].source_name, self._currentAccount)
+        self.assertIs(self._converter.transactions[1].destination_name, "Expenses:Misc")
 
 
 if __name__ == "__main__":
