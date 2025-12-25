@@ -1,4 +1,10 @@
 import dataclasses as dc
+import enum
+
+
+class TransactionType(enum.Enum):
+    WITHDRAWAL = "withdrawal"
+    DEPOSIT = "deposit"
 
 
 @dc.dataclass
@@ -8,7 +14,7 @@ class BaseTransaction:
     description: str
     order: int
     reconciled: bool
-    type: str = dc.field(init=False)
+    type: TransactionType = dc.field(init=False)
     source_name: str | None
     destination_name: str | None
     currency_id: int | None
@@ -47,11 +53,7 @@ class BaseTransaction:
     invoice_date: str | None
 
     def __post_init__(self):
-        if self.amount < 0:
-            self.type = "withdrawal"
-        else:
-            self.type = "deposit"
-
+        self.type = TransactionType.WITHDRAWAL if self.amount < 0 else TransactionType.DEPOSIT
         self.amount = abs(self.amount)
 
 

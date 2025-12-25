@@ -31,12 +31,13 @@ class ConvertData:
     def assignAccounts(self) -> None:
         for transaction in self._transactions:
             accountName = self._findAccountName(transaction.description)
-            if transaction.amount < 0:
-                transaction.source_name = self._currentAccount
+
+            if transaction.type is data.TransactionType.WITHDRAWAL:
                 transaction.destination_name = accountName
-            else:
-                transaction.destination_name = self._currentAccount
+            elif transaction.type is data.TransactionType.DEPOSIT:
                 transaction.source_name = accountName
+            else:
+                raise ValueError(f"Unknown transaction type: {transaction.type}")
 
     def _convert(self) -> pd.DataFrame:
         # Placeholder for conversion logic

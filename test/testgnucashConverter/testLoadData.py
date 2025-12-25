@@ -1,6 +1,7 @@
 import unittest
 
 from gnucashConverter import loadData as ldb
+from gnucashConverter import data
 
 
 class TestLoaderBarclays(unittest.TestCase):
@@ -14,14 +15,16 @@ class TestLoaderBarclays(unittest.TestCase):
         self._loader.load()
 
         self.assertEqual(self._loader.transactions[0].date, "2025-05-30")
-        self.assertEqual(self._loader.transactions[0].amount, -1619.25)
+        self.assertEqual(self._loader.transactions[0].amount, 1619.25)
         self.assertEqual(self._loader.transactions[0].description, "Test1 - Test2Händler")
         self.assertEqual(self._loader.transactions[0].source_name, "Barclays")
+        self.assertEqual(self._loader.transactions[0].type, data.TransactionType.WITHDRAWAL)
 
         self.assertEqual(self._loader.transactions[1].date, "2024-05-30")
-        self.assertEqual(self._loader.transactions[1].amount, -13.32)
+        self.assertEqual(self._loader.transactions[1].amount, 13.32)
         self.assertEqual(self._loader.transactions[1].description, "Test2 - Test1h")
         self.assertEqual(self._loader.transactions[1].source_name, "Barclays")
+        self.assertEqual(self._loader.transactions[1].type, data.TransactionType.WITHDRAWAL)
 
 
 class TestLoaderPaypal(unittest.TestCase):
@@ -37,12 +40,14 @@ class TestLoaderPaypal(unittest.TestCase):
         self.assertEqual(self._loader.transactions[0].date, "2025-07-04")
         self.assertEqual(self._loader.transactions[0].amount, 60.0)
         self.assertEqual(self._loader.transactions[0].description, "Handyzahlung; asdf - rf@gmx.net - asdf")
-        self.assertEqual(self._loader.transactions[0].source_name, "Paypal")
+        self.assertEqual(self._loader.transactions[0].destination_name, "Paypal")
+        self.assertEqual(self._loader.transactions[0].type, data.TransactionType.DEPOSIT)
 
         self.assertEqual(self._loader.transactions[1].date, "2025-07-04")
-        self.assertEqual(self._loader.transactions[1].amount, -3.0)
+        self.assertEqual(self._loader.transactions[1].amount, 3.0)
         self.assertEqual(self._loader.transactions[1].description, "Handyzahlung - pbfd")
         self.assertEqual(self._loader.transactions[1].source_name, "Paypal")
+        self.assertEqual(self._loader.transactions[1].type, data.TransactionType.WITHDRAWAL)
 
 
 class TestLoaderTr(unittest.TestCase):
@@ -58,23 +63,27 @@ class TestLoaderTr(unittest.TestCase):
         self.assertEqual(self._loader.transactions[0].date, "2024-02-06")
         self.assertEqual(self._loader.transactions[0].amount, 10000.0)
         self.assertEqual(self._loader.transactions[0].description, "asdf - Deposit")
-        self.assertEqual(self._loader.transactions[0].source_name, "tr")
+        self.assertEqual(self._loader.transactions[0].destination_name, "tr")
+        self.assertEqual(self._loader.transactions[0].type, data.TransactionType.DEPOSIT)
 
 
         self.assertEqual(self._loader.transactions[1].date, "2025-07-01")
         self.assertEqual(self._loader.transactions[1].amount, 48.24)
         self.assertEqual(self._loader.transactions[1].description, "ijkl - Interest")
-        self.assertEqual(self._loader.transactions[1].source_name, "tr")
+        self.assertEqual(self._loader.transactions[1].destination_name, "tr")
+        self.assertEqual(self._loader.transactions[1].type, data.TransactionType.DEPOSIT)
 
         self.assertEqual(self._loader.transactions[2].date, "2025-07-02")
         self.assertEqual(self._loader.transactions[2].amount, 128.74)
         self.assertEqual(self._loader.transactions[2].description, "korrekt - Tax Refund")
-        self.assertEqual(self._loader.transactions[2].source_name, "tr")
+        self.assertEqual(self._loader.transactions[2].destination_name, "tr")
+        self.assertEqual(self._loader.transactions[2].type, data.TransactionType.DEPOSIT)
 
         self.assertEqual(self._loader.transactions[3].date, "2025-08-01")
-        self.assertEqual(self._loader.transactions[3].amount, -115.0)
+        self.assertEqual(self._loader.transactions[3].amount, 115.0)
         self.assertEqual(self._loader.transactions[3].description, "money - Removal")
         self.assertEqual(self._loader.transactions[3].source_name, "tr")
+        self.assertEqual(self._loader.transactions[3].type, data.TransactionType.WITHDRAWAL)
 
 if __name__ == "__main__":
     unittest.main()

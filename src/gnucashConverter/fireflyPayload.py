@@ -1,7 +1,7 @@
 from typing import Optional, Any, Union, Dict, Callable, overload
 import dataclasses as dc
 
-from gnucashConverter.data import BaseTransaction, PostAccount
+from gnucashConverter.data import BaseTransaction, PostAccount, TransactionType
 
 
 class PayloadFactory:
@@ -32,7 +32,7 @@ class PayloadFactory:
 
     def postTransaction(
         self,
-        type: str,
+        type: TransactionType,
         date: str,
         amount: Union[str, float],
         description: str,
@@ -88,7 +88,7 @@ class PayloadFactory:
         """
         # Build the transaction object
         transaction: dict[str, Any] = {
-            "type": type,
+            "type": type.value,
             "date": date,
             "amount": str(amount),
             "description": description,
