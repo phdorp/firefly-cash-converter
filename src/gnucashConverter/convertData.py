@@ -8,7 +8,7 @@ from gnucashConverter import data
 
 class ConvertData:
     @property
-    def transactions(self) -> List[data.Transaction]:
+    def transactions(self) -> List[data.BaseTransaction]:
         """Return the list of transactions to be converted.
 
         Returns:
@@ -16,7 +16,7 @@ class ConvertData:
         """
         return self._transactions
 
-    def __init__(self, currentAccount: str, data: List[data.Transaction], accountMap: dict[str, str] = None):
+    def __init__(self, currentAccount: str, data: List[data.BaseTransaction], accountMap: dict[str, str] = None):
         self._currentAccount = currentAccount
         self._transactions = data
         self._unmappedAccountName = "Imbalance-EUR"

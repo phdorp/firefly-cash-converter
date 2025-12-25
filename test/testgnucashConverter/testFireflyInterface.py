@@ -16,8 +16,8 @@ class TestFireflyInterface(unittest.TestCase):
     def testCreateTransactions(self):
         # Prepare two transactions
         transactions = [
-            data.Transaction(date="2025-05-30", amount=-1619.25, description="Test1", source_name="Expenses:Shopping", destination_name="Assets:Current"),
-            data.Transaction(date="2024-05-30", amount=-13.32, description="Test2", source_name="Expenses:Misc", destination_name="Assets:Current"),
+            data.PostTransaction(date="2025-05-30", amount=-1619.25, description="Test1", source_name="Expenses:Shopping", destination_name="Assets:Current"),
+            data.PostTransaction(date="2024-05-30", amount=-13.32, description="Test2", source_name="Expenses:Misc", destination_name="Assets:Current"),
         ]
 
         # Mock the session.post method to capture calls and return a fake response

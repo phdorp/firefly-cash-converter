@@ -40,7 +40,7 @@ class FireflyInterface:
             }
         )
 
-    def _postTransaction(self, transaction: data.Transaction) -> requests.Response:
+    def _postTransaction(self, transaction: data.BaseTransaction) -> requests.Response:
         payload = self._payloadFactory.toPayload(transaction)
         url = f"{self._api_url}/transactions"
         resp = self._session.post(url, json=payload)
@@ -95,7 +95,7 @@ class FireflyInterface:
         resp.raise_for_status()
         return resp
 
-    def createTransaction(self, transaction: data.Transaction) -> requests.Response:
+    def createTransaction(self, transaction: data.BaseTransaction) -> requests.Response:
         """Create a single transaction on the Firefly III server.
 
         Args:
@@ -107,6 +107,4 @@ class FireflyInterface:
         Returns:
             The `requests.Response` from the Firefly API.
         """
-        accounts = self.getAccounts()
-        transaction.SourceAccountName
         return self._postTransaction(transaction)

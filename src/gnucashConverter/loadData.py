@@ -1,7 +1,8 @@
 import abc
 import dataclasses as dc
 import enum
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, get_args, Tuple
+from types import UnionType, NoneType
 
 import numpy as np
 import pandas as pd
@@ -10,16 +11,16 @@ from gnucashConverter import data
 
 
 class Fields(enum.IntEnum):
-    DESCRIPTION = 0
-    DATE = 1
-    DEPOSIT = 2
-    SOURCE_ACCOUNT = 3
-    DESTINATION_ACCOUNT = 4
+    description = 0
+    date = 1
+    amount = 2
+    source_name = 3
+    destination_name = 4
 
 
 class DataLoader(abc.ABC):
     @property
-    def transactions(self) -> List[data.Transaction]:
+    def transactions(self) -> List[data.BaseTransaction]:
         """Return the list of parsed transactions.
 
         Returns:
@@ -27,19 +28,28 @@ class DataLoader(abc.ABC):
         """
         return self._transactions
 
-    def __init__(self, dataPath: str):
+    def __init__(self, dataPath: str, accountName: str):
         """Initialize the data loader with the path to the data file.
 
         Args:
             dataPath (str): Filesystem path to the data file to be loaded.
         """
         self._dataPath = dataPath
-        self._transactions: List[data.Transaction] = []
-        self._fieldNames: List[str] = [field.name for field in dc.fields(data.Transaction)]
-        self._fieldTypes: List[type] = [field.type for field in dc.fields(data.Transaction)]
-        mandatoryFields = ["Description", "Date", "Deposit"]
-        self._fieldAliases: Dict[str, Fields] = {fieldName: Fields[fieldName.upper()] for fieldName in mandatoryFields}
-        self._fieldFilters: List[Callable[[str], str]] = [lambda content: content for _ in self._fieldNames]
+        self._accountName = accountName
+        self._transactions: List[data.BaseTransaction] = []
+
+        self._fieldTypes: List[type] = []
+        for field in dc.fields(data.BaseTransaction):
+            if field.name in Fields.__members__:
+                if isinstance(field.type, type):
+                    self._fieldTypes.insert(Fields[field.name].value, field.type)
+                elif isinstance(field.type, UnionType):
+                    unionTypes: Tuple[type, NoneType] = get_args(field.type)
+                    assert len(unionTypes) == 2 and unionTypes[1] is NoneType, "Second type must be NoneType"
+                    self._fieldTypes.insert(Fields[field.name].value, unionTypes[0])
+
+        self._fieldAliases: Dict[str, Fields] = {}
+        self._fieldFilters: List[Callable[[str], str]] = [lambda content: content for _ in Fields]
         self._fieldMergeSep = " - "  # Separator used when merging multiple entries into one field
 
     @abc.abstractmethod
@@ -61,7 +71,7 @@ class TableDataLoader(DataLoader):
     Introduces the headerRowIdx attribute to specify the index of the header row in the data file.
     """
 
-    def __init__(self, headerRowIdx: int, dataPath: str):
+    def __init__(self, headerRowIdx: int, dataPath: str, accountName: str):
         """Initialize a table-style loader.
 
         Args:
@@ -69,9 +79,9 @@ class TableDataLoader(DataLoader):
                 data (used to locate column names).
             dataPath (str): Path to the source data file.
         """
-        super().__init__(dataPath)
+        super().__init__(dataPath, accountName)
         self._headerRowIdx = headerRowIdx
-        self._fieldFilters[Fields.DESCRIPTION] = self._descriptionFilter  # Remove NaN descriptions
+        self._fieldFilters[Fields.description] = self._descriptionFilter  # Remove NaN descriptions
 
     @staticmethod
     def _descriptionFilter(content: str) -> str:
@@ -84,11 +94,11 @@ class TableDataLoader(DataLoader):
             str: Cleaned description.
         """
         if pd.isna(content):
-            return ''
+            return ""
 
         return content.replace(",", ";")
 
-    def _getTransactions(self, dataFrame: pd.DataFrame, colIdcs: List[int]) -> List[data.Transaction]:
+    def _getTransactions(self, dataFrame: pd.DataFrame, colIdcs: List[int]) -> List[data.BaseTransaction]:
         """Extract transactions from a tabular DataFrame using resolved column indices.
 
         This helper iterates over data rows after the header row (as defined by
@@ -102,31 +112,32 @@ class TableDataLoader(DataLoader):
         Returns:
             List[data.Transaction]: Parsed transactions.
         """
-        transactions: List[data.Transaction] = []
+        transactions: List[data.BaseTransaction] = []
         for rowIdx in range(self._headerRowIdx + 1, dataFrame.shape[0]):
             # Create a dictionary to hold the current transaction data
             row = dataFrame.values[rowIdx]
             transactionData: Dict[str, Any] = {}
             for colIdx, fieldAlias in zip(colIdcs, self._fieldAliases):
                 field = self._fieldAliases[fieldAlias]
-                storedData = transactionData.get(self._fieldNames[field], None)
+                storedData = transactionData.get(field.name, None)
                 inputData = self._fieldTypes[field](self._fieldFilters[field](row[colIdx]))
 
                 if storedData is None:
-                    transactionData[self._fieldNames[field]] = inputData
+                    transactionData[field.name] = inputData
                 elif isinstance(inputData, str) and isinstance(storedData, str):
                     if inputData != "":
-                        transactionData[self._fieldNames[field]] += self._fieldMergeSep + inputData
+                        transactionData[field.name] += self._fieldMergeSep + inputData
                 else:
-                    raise ValueError(f"Cannot merge multiple values for non-string field {self._fieldNames[field]}")
+                    raise ValueError(f"Cannot merge multiple values for non-string field {field.name}")
 
             # Only add the transaction if it contains data
             if len(transactionData) > 0:
-                transactions.append(data.Transaction(**transactionData))
+                transactionData[Fields.source_name.name] = self._accountName
+                transactions.append(data.PostTransaction(**transactionData))
 
         return transactions
 
-    def _parseData(self, dataFrame: pd.DataFrame) -> List[data.Transaction]:
+    def _parseData(self, dataFrame: pd.DataFrame) -> List[data.BaseTransaction]:
         """Parse the data from tabular data ``DataFrame``.
 
         Locates the header row at ``self._headerRowIdx`` to determine the
@@ -150,14 +161,14 @@ class TableDataLoader(DataLoader):
 
 class DataLoaderXlsx(TableDataLoader):
 
-    def __init__(self, headerRowIdx: int, dataPath: str):
+    def __init__(self, headerRowIdx: int, dataPath: str, accountName: str):
         """Create an XLSX table loader.
 
         Args:
             headerRowIdx (int): Index of the header row in the spreadsheet.
             dataPath (str): Path to the Excel file.
         """
-        super().__init__(headerRowIdx, dataPath)
+        super().__init__(headerRowIdx, dataPath, accountName)
 
     def load(self) -> List[data.Transaction]:
         """Load data from an Excel file and populate ``self._transactions``.
@@ -182,7 +193,7 @@ class DataLoaderCsv(TableDataLoader):
         dataPath (str): Path to the CSV file to load.
     """
 
-    def __init__(self, separator: str, headerRowIdx: int, dataPath: str):
+    def __init__(self, separator: str, headerRowIdx: int, dataPath: str, accountName: str):
         """Create a CSV table loader.
 
         Args:
@@ -191,7 +202,7 @@ class DataLoaderCsv(TableDataLoader):
             dataPath (str): Path to the CSV file.
         """
         self._separator = separator
-        super().__init__(headerRowIdx, dataPath)
+        super().__init__(headerRowIdx, dataPath, accountName)
 
     def load(self) -> List[data.Transaction]:
         """Load data from a CSV file and populate ``self._transactions``.
@@ -209,65 +220,66 @@ class DataLoaderCsv(TableDataLoader):
 
 class DataLoaderPaypal(DataLoaderCsv):
 
-    def __init__(self, dataPath):
+    def __init__(self, dataPath: str, accountName: str):
         """Initialize a PayPal CSV loader.
 
         Args:
             dataPath (str): Path to the PayPal CSV file.
         """
-        super().__init__(separator=",", headerRowIdx=0, dataPath=dataPath)
+        super().__init__(separator=",", headerRowIdx=0, dataPath=dataPath, accountName=accountName)
 
         self._fieldAliases = {
-            "Beschreibung": Fields.DESCRIPTION,
-            "Absender E-Mail-Adresse": Fields.DESCRIPTION,
-            "Name": Fields.DESCRIPTION,
-            "Datum": Fields.DATE,
-            "Brutto": Fields.DEPOSIT,
+            "Beschreibung": Fields.description,
+            "Absender E-Mail-Adresse": Fields.description,
+            "Name": Fields.description,
+            "Datum": Fields.date,
+            "Brutto": Fields.amount,
         }
         # Convert German-formatted numbers (e.g., "1.234,56 €") to standard float format ("1234.56")
-        self._fieldFilters[Fields.DEPOSIT] = lambda content: content.replace('"', "").replace(",", ".")
-        self._fieldFilters[Fields.DATE] = lambda content: "-".join(str(content).split("T")[0].split(".")[::-1])
+        self._fieldFilters[Fields.amount] = lambda content: content.replace('"', "").replace(",", ".")
+        self._fieldFilters[Fields.date] = lambda content: "-".join(str(content).split("T")[0].split(".")[::-1])
+
 
 class DataLoaderBarclays(DataLoaderXlsx):
 
-    def __init__(self, dataPath):
+    def __init__(self, dataPath: str, accountName: str):
         """Initialize a Barclays XLSX loader.
 
         Args:
             dataPath (str): Path to the Barclays Excel file.
         """
-        super().__init__(headerRowIdx=11, dataPath=dataPath)
+        super().__init__(headerRowIdx=11, dataPath=dataPath, accountName=accountName)
 
         self._fieldAliases = {
-            "Beschreibung": Fields.DESCRIPTION,
-            "Händlerdetails": Fields.DESCRIPTION,
-            "Buchungsdatum": Fields.DATE,
-            "Originalbetrag": Fields.DEPOSIT,
+            "Beschreibung": Fields.description,
+            "Händlerdetails": Fields.description,
+            "Buchungsdatum": Fields.date,
+            "Originalbetrag": Fields.amount,
         }
         # Convert German-formatted numbers (e.g., "1.234,56 €") to standard float format ("1234.56")
-        self._fieldFilters[Fields.DEPOSIT] = (
+        self._fieldFilters[Fields.amount] = (
             lambda content: content.replace(".", "").replace(",", ".").replace(" €", "")
         )
-        self._fieldFilters[Fields.DATE] = lambda content: "-".join(str(content).split(".")[::-1])
+        self._fieldFilters[Fields.date] = lambda content: "-".join(str(content).split(".")[::-1])
 
 
 class DataLoaderTr(DataLoaderCsv):
 
-    def __init__(self, dataPath):
+    def __init__(self, dataPath: str, accountName: str):
         """Initialize a Trade Republic CSV loader.
 
         Args:
             dataPath (str): Path to the Trade Republic CSV file.
         """
-        super().__init__(separator=";", headerRowIdx=0, dataPath=dataPath)
+        super().__init__(separator=";", headerRowIdx=0, dataPath=dataPath, accountName=accountName)
 
         self._fieldAliases = {
-            "Note": Fields.DESCRIPTION,
-            "Type": Fields.DESCRIPTION,
-            "Date": Fields.DATE,
-            "Value": Fields.DEPOSIT,
+            "Note": Fields.description,
+            "Type": Fields.description,
+            "Date": Fields.date,
+            "Value": Fields.amount,
         }
-        self._fieldFilters[Fields.DATE] = lambda content: str(content).split("T")[0]
+        self._fieldFilters[Fields.date] = lambda content: str(content).split("T")[0]
 
 
 loaderMapping: dict[str, type[DataLoader]] = {

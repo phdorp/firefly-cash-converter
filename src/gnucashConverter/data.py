@@ -2,12 +2,91 @@ import dataclasses as dc
 
 
 @dc.dataclass
-class Transaction:
-    description: str
+class BaseTransaction:
     date: str
     amount: float
-    source_name: str = ""  # Account funds come from (for withdrawals)
-    destination_name: str = ""  # Account funds go to (for deposits)
+    source_name: str
+    description: str
+    destination_name: str | None
+    type: str | None
+    order: int | None
+    currency_id: int | None
+    currency_code: str | None
+    foreign_amount: float | None
+    foreign_currency_id: int | None
+    foreign_currency_code: str | None
+    budget_id: int | None
+    budget_name: str | None
+    category_id: int | None
+    category_name: str | None
+    source_id: int | None
+    destination_id: int | None
+    reconciled: bool | None
+    piggy_bank_id: int | None
+    piggy_bank_name: str | None
+    bill_id: int | None
+    bill_name: str | None
+    tags: str | None
+    notes: str | None
+    internal_reference: str | None
+    external_id: str | None
+    external_url: str | None
+    sepa_cc: str | None
+    sepa_ct_op: str | None
+    sepa_ct_id: str | None
+    sepa_db: str | None
+    sepa_country: str | None
+    sepa_ep: str | None
+    sepa_ci: str | None
+    sepa_batch_id: str | None
+    interest_date: str | None
+    book_date: str | None
+    process_date: str | None
+    due_date: str | None
+    payment_date: str | None
+    invoice_date: str | None
+
+
+@dc.dataclass
+class PostTransaction(BaseTransaction):
+    destination_name: str | None = None
+    type: str | None = None
+    order: int | None = None
+    currency_id: int | None = None
+    currency_code: str | None = None
+    foreign_amount: float | None = None
+    foreign_currency_id: int | None = None
+    foreign_currency_code: str | None = None
+    budget_id: int | None = None
+    budget_name: str | None = None
+    category_id: int | None = None
+    category_name: str | None = None
+    source_id: int | None = None
+    destination_id: int | None = None
+    reconciled: bool | None = None
+    piggy_bank_id: int | None = None
+    piggy_bank_name: str | None = None
+    bill_id: int | None = None
+    bill_name: str | None = None
+    tags: str | None = None
+    notes: str | None = None
+    internal_reference: str | None = None
+    external_id: str | None = None
+    external_url: str | None = None
+    sepa_cc: str | None = None
+    sepa_ct_op: str | None = None
+    sepa_ct_id: str | None = None
+    sepa_db: str | None = None
+    sepa_country: str | None = None
+    sepa_ep: str | None = None
+    sepa_ci: str | None = None
+    sepa_batch_id: str | None = None
+    interest_date: str | None = None
+    book_date: str | None = None
+    process_date: str | None = None
+    due_date: str | None = None
+    payment_date: str | None = None
+    invoice_date: str | None = None
 
 
 @dc.dataclass
@@ -70,6 +149,7 @@ class GetAccount(BaseAccount):
 
 @dc.dataclass
 class PostAccount(BaseAccount):
+    type: str = dc.field(init=False)
     iban: str | None = None
     bic: str | None = None
     account_number: str | None = None
@@ -96,7 +176,6 @@ class PostAccount(BaseAccount):
 
 @dc.dataclass
 class PostAssetAccount(PostAccount):
-    type: str = dc.field(init=False)
     account_role: str = "defaultAsset"
 
     def __post_init__(self):
@@ -108,3 +187,14 @@ class PostAssetAccount(PostAccount):
             raise AttributeError("type is read-only for PostAssetAccount")
         super().__setattr__(key, value)
 
+
+@dc.dataclass
+class PostExpenseAccount(PostAccount):
+    def __post_init__(self):
+        # Lock down immutable account type for expense accounts
+        object.__setattr__(self, "type", "expense")
+
+    def __setattr__(self, key, value):
+        if key == "type" and "type" in self.__dict__:
+            raise AttributeError("type is read-only for PostExpenseAccount")
+        super().__setattr__(key, value)

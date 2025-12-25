@@ -1,30 +1,30 @@
 from typing import Optional, Any, Union, Dict, Callable, overload
 import dataclasses as dc
 
-from gnucashConverter.data import Transaction, PostAccount, PostAssetAccount
+from gnucashConverter.data import BaseTransaction, PostAccount
 
 
 class PayloadFactory:
     def __init__(self, format: str = "json") -> None:
         self._format = format.lower()
-        self._toPayload: Dict[Any, Callable] = {
-            Transaction: self._toTransactionPayload,
-            PostAssetAccount: self._toAccountPayload,
-            PostAccount: self._toAccountPayload,
-        }
 
     @overload
-    def toPayload(self, data: Transaction) -> dict[str, Any]:
+    def toPayload(self, data: BaseTransaction) -> dict[str, Any]:
         pass
 
     @overload
     def toPayload(self, data: PostAccount) -> dict[str, Any]:
         pass
 
-    def toPayload(self, data: Union[Transaction, PostAccount]) -> dict[str, Any]:
-        return self._toPayload[type(data)](data)
+    def toPayload(self, data: Union[BaseTransaction, PostAccount]) -> dict[str, Any]:
+        if isinstance(data, PostAccount):
+            return self._toAccountPayload(data)
+        elif isinstance(data, BaseTransaction):
+            return self._toTransactionPayload(data)
+        else:
+            raise TypeError(f"Unsupported data type for payload conversion: {type(data)}")
 
-    def _toTransactionPayload(self, transaction: Transaction) -> dict[str, Any]:
+    def _toTransactionPayload(self, transaction: BaseTransaction) -> dict[str, Any]:
         isWithdrawal = transaction.amount < 0
         sourceName = transaction.source_name or None
         destinationName = transaction.destination_name or None
