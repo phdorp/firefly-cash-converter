@@ -16,6 +16,7 @@ class Fields(enum.IntEnum):
     amount = 2
     source_name = 3
     destination_name = 4
+    type = 5
 
 
 class DataLoader(abc.ABC):
@@ -132,7 +133,11 @@ class TableDataLoader(DataLoader):
 
             # Only add the transaction if it contains data
             if len(transactionData) > 0:
-                transactionData[Fields.source_name.name] = self._accountName
+                isWithdrawal = transactionData[Fields.amount.name] < 0
+                if isWithdrawal:
+                    transactionData[Fields.source_name.name] = self._accountName
+                else:
+                    transactionData[Fields.destination_name.name] = self._accountName
                 transactions.append(data.PostTransaction(**transactionData))
 
         return transactions
@@ -257,9 +262,7 @@ class DataLoaderBarclays(DataLoaderXlsx):
             "Originalbetrag": Fields.amount,
         }
         # Convert German-formatted numbers (e.g., "1.234,56 €") to standard float format ("1234.56")
-        self._fieldFilters[Fields.amount] = (
-            lambda content: content.replace(".", "").replace(",", ".").replace(" €", "")
-        )
+        self._fieldFilters[Fields.amount] = lambda content: content.replace(".", "").replace(",", ".").replace(" €", "")
         self._fieldFilters[Fields.date] = lambda content: "-".join(str(content).split(".")[::-1])
 
 

@@ -5,11 +5,12 @@ import dataclasses as dc
 class BaseTransaction:
     date: str
     amount: float
-    source_name: str
     description: str
+    order: int
+    reconciled: bool
+    type: str = dc.field(init=False)
+    source_name: str | None
     destination_name: str | None
-    type: str | None
-    order: int | None
     currency_id: int | None
     currency_code: str | None
     foreign_amount: float | None
@@ -21,7 +22,6 @@ class BaseTransaction:
     category_name: str | None
     source_id: int | None
     destination_id: int | None
-    reconciled: bool | None
     piggy_bank_id: int | None
     piggy_bank_name: str | None
     bill_id: int | None
@@ -46,12 +46,21 @@ class BaseTransaction:
     payment_date: str | None
     invoice_date: str | None
 
+    def __post_init__(self):
+        if self.amount < 0:
+            self.type = "withdrawal"
+        else:
+            self.type = "deposit"
+
+        self.amount = abs(self.amount)
+
 
 @dc.dataclass
 class PostTransaction(BaseTransaction):
+    order: int = 0
+    reconciled: bool = True
+    source_name: str | None = None
     destination_name: str | None = None
-    type: str | None = None
-    order: int | None = None
     currency_id: int | None = None
     currency_code: str | None = None
     foreign_amount: float | None = None
@@ -63,7 +72,6 @@ class PostTransaction(BaseTransaction):
     category_name: str | None = None
     source_id: int | None = None
     destination_id: int | None = None
-    reconciled: bool | None = None
     piggy_bank_id: int | None = None
     piggy_bank_name: str | None = None
     bill_id: int | None = None

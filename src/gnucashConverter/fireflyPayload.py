@@ -25,19 +25,7 @@ class PayloadFactory:
             raise TypeError(f"Unsupported data type for payload conversion: {type(data)}")
 
     def _toTransactionPayload(self, transaction: BaseTransaction) -> dict[str, Any]:
-        isWithdrawal = transaction.amount < 0
-        sourceName = transaction.source_name or None
-        destinationName = transaction.destination_name or None
-
-        return self.postTransaction(
-            type="withdrawal" if isWithdrawal else "deposit",
-            date=transaction.date,
-            amount=str(abs(transaction.amount)),
-            description=transaction.description,
-            source_name=sourceName,
-            destination_name=destinationName,
-            currency_code="EUR",
-        )
+        return self.postTransaction(**transaction.__dict__)
 
     def _toAccountPayload(self, account: PostAccount) -> dict[str, Any]:
         return self.postAccount(**account.__dict__)
@@ -46,7 +34,7 @@ class PayloadFactory:
         self,
         type: str,
         date: str,
-        amount: str,
+        amount: Union[str, float],
         description: str,
         source_name: Optional[str] = None,
         source_id: Optional[str] = None,
@@ -102,7 +90,7 @@ class PayloadFactory:
         transaction: dict[str, Any] = {
             "type": type,
             "date": date,
-            "amount": amount,
+            "amount": str(amount),
             "description": description,
             "order": order,
             "reconciled": reconciled,
