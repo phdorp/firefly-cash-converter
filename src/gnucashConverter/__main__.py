@@ -23,10 +23,12 @@ def main():
         type=str,
         choices=["barclays", "paypal", "trade_republic"],
     )
+    parser.add_argument("--account_name", type=str, help="Name of the account to assign to loaded transactions.", default=None)
 
     arguments = parser.parse_args()
 
-    loader: ldb.DataLoader = ldb.loaderMapping[arguments.source](arguments.input_file)
+    loader: ldb.DataLoader = ldb.loaderMapping[arguments.source](arguments.input_file, arguments.account_name)
+    loader.load()
 
     try:
         accountMap = toml.load(arguments.account_map) if arguments.account_map else None

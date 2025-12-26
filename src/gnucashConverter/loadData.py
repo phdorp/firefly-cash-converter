@@ -1,7 +1,7 @@
 import abc
 import dataclasses as dc
 import enum
-from typing import Any, Callable, Dict, List, get_args, Tuple
+from typing import Any, Callable, Dict, List, get_args, Tuple, Optional
 from types import UnionType, NoneType
 
 import numpy as np
@@ -29,14 +29,14 @@ class DataLoader(abc.ABC):
         """
         return self._transactions
 
-    def __init__(self, dataPath: str, accountName: str):
+    def __init__(self, dataPath: str, accountName: Optional[str] = None):
         """Initialize the data loader with the path to the data file.
 
         Args:
             dataPath (str): Filesystem path to the data file to be loaded.
         """
         self._dataPath = dataPath
-        self._accountName = accountName
+        self._accountName = str(accountName)
         self._transactions: List[data.BaseTransaction] = []
 
         self._fieldTypes: List[type] = []
@@ -72,7 +72,7 @@ class TableDataLoader(DataLoader):
     Introduces the headerRowIdx attribute to specify the index of the header row in the data file.
     """
 
-    def __init__(self, headerRowIdx: int, dataPath: str, accountName: str):
+    def __init__(self, headerRowIdx: int, dataPath: str, accountName: Optional[str] = None):
         """Initialize a table-style loader.
 
         Args:
@@ -166,7 +166,7 @@ class TableDataLoader(DataLoader):
 
 class DataLoaderXlsx(TableDataLoader):
 
-    def __init__(self, headerRowIdx: int, dataPath: str, accountName: str):
+    def __init__(self, headerRowIdx: int, dataPath: str, accountName: Optional[str] = None):
         """Create an XLSX table loader.
 
         Args:
@@ -198,7 +198,7 @@ class DataLoaderCsv(TableDataLoader):
         dataPath (str): Path to the CSV file to load.
     """
 
-    def __init__(self, separator: str, headerRowIdx: int, dataPath: str, accountName: str):
+    def __init__(self, separator: str, headerRowIdx: int, dataPath: str, accountName: Optional[str] = None):
         """Create a CSV table loader.
 
         Args:
@@ -225,12 +225,13 @@ class DataLoaderCsv(TableDataLoader):
 
 class DataLoaderPaypal(DataLoaderCsv):
 
-    def __init__(self, dataPath: str, accountName: str):
+    def __init__(self, dataPath: str, accountName: Optional[str] = None):
         """Initialize a PayPal CSV loader.
 
         Args:
             dataPath (str): Path to the PayPal CSV file.
         """
+        accountName = accountName if accountName is not None else "paypal"
         super().__init__(separator=",", headerRowIdx=0, dataPath=dataPath, accountName=accountName)
 
         self._fieldAliases = {
@@ -247,12 +248,13 @@ class DataLoaderPaypal(DataLoaderCsv):
 
 class DataLoaderBarclays(DataLoaderXlsx):
 
-    def __init__(self, dataPath: str, accountName: str):
+    def __init__(self, dataPath: str, accountName: Optional[str] = None):
         """Initialize a Barclays XLSX loader.
 
         Args:
             dataPath (str): Path to the Barclays Excel file.
         """
+        accountName = accountName if accountName is not None else "barclays"
         super().__init__(headerRowIdx=11, dataPath=dataPath, accountName=accountName)
 
         self._fieldAliases = {
@@ -268,12 +270,13 @@ class DataLoaderBarclays(DataLoaderXlsx):
 
 class DataLoaderTr(DataLoaderCsv):
 
-    def __init__(self, dataPath: str, accountName: str):
+    def __init__(self, dataPath: str, accountName: Optional[str] = None):
         """Initialize a Trade Republic CSV loader.
 
         Args:
             dataPath (str): Path to the Trade Republic CSV file.
         """
+        accountName = accountName if accountName is not None else "trade_republic"
         super().__init__(separator=";", headerRowIdx=0, dataPath=dataPath, accountName=accountName)
 
         self._fieldAliases = {

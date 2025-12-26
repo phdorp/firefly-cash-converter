@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict, Optional
 
 import pandas as pd
 import re
@@ -16,8 +16,7 @@ class ConvertData:
         """
         return self._transactions
 
-    def __init__(self, currentAccount: str, data: List[data.BaseTransaction], accountMap: dict[str, str] = None):
-        self._currentAccount = currentAccount
+    def __init__(self, data: List[data.BaseTransaction], accountMap: Optional[Dict[str, str]] = None):
         self._transactions = data
         self._unmappedAccountName = "Imbalance-EUR"
         self._accountMap = accountMap if accountMap is not None else {}
