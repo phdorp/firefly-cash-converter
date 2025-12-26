@@ -2,9 +2,16 @@ from __future__ import annotations
 
 from typing import List, Optional, Dict
 import requests
+import enum
+import ast
 
 from gnucashConverter import data
 from gnucashConverter.fireflyPayload import PayloadFactory
+
+
+class DuplicateTransactionHandle(enum.Enum):
+    IGNORE = "ignore"
+    ERROR = "error"
 
 
 class FireflyInterface:
@@ -25,10 +32,16 @@ class FireflyInterface:
         base_url: str,
         api_token: str,
         default_balance_account_id: Optional[int] = None,
+        duplicate_transaction: DuplicateTransactionHandle | str = DuplicateTransactionHandle.ERROR,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._api_url = f"{self._base_url}/api/v1"
         self._api_token = api_token
+        self._duplicate_transaction = (
+            duplicate_transaction
+            if isinstance(duplicate_transaction, DuplicateTransactionHandle)
+            else DuplicateTransactionHandle(duplicate_transaction)
+        )
         self._default_balance_account_id = default_balance_account_id
         self._payloadFactory = PayloadFactory(format="json")
         self._session = requests.Session()
@@ -44,6 +57,16 @@ class FireflyInterface:
         payload = self._payloadFactory.toPayload(transaction)
         url = f"{self._api_url}/transactions"
         resp = self._session.post(url, json=payload)
+
+        if resp.status_code == 422:
+            errorMessage: str = ast.literal_eval(resp.text).get("message")
+            isDuplicate = "duplicate" in errorMessage.lower()
+            if isDuplicate and self._duplicate_transaction == DuplicateTransactionHandle.IGNORE:
+                print(f"Duplicate transaction detected, ignoring: {transaction}")
+                return resp
+            else:
+                raise Exception(f"Error creating transaction: {errorMessage}")
+
         resp.raise_for_status()
         return resp
 

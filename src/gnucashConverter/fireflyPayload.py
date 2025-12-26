@@ -5,8 +5,9 @@ from gnucashConverter.data import BaseTransaction, PostAccount, TransactionType
 
 
 class PayloadFactory:
-    def __init__(self, format: str = "json") -> None:
+    def __init__(self, format: str = "json", duplicate_transaction_check: bool = True) -> None:
         self._format = format.lower()
+        self._duplicate_transaction_check = duplicate_transaction_check
 
     @overload
     def toPayload(self, data: BaseTransaction) -> dict[str, Any]:
@@ -75,7 +76,6 @@ class PayloadFactory:
         payment_date: Optional[str] = None,
         invoice_date: Optional[str] = None,
         group_title: Optional[str] = None,
-        error_if_duplicate_hash: bool = False,
         apply_rules: bool = False,
         fire_webhooks: bool = True,
     ) -> dict[str, Any]:
@@ -184,7 +184,7 @@ class PayloadFactory:
 
         # Build the payload wrapper
         payload: dict[str, Any] = {
-            "error_if_duplicate_hash": error_if_duplicate_hash,
+            "error_if_duplicate_hash": self._duplicate_transaction_check,
             "apply_rules": apply_rules,
             "fire_webhooks": fire_webhooks,
             "transactions": [transaction],
