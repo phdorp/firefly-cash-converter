@@ -285,7 +285,6 @@ class DataLoaderTr(DataLoaderCsv):
             "Date": Fields.date,
             "Value": Fields.amount,
         }
-        self._fieldFilters[Fields.date] = lambda content: str(content).split("T")[0]
 
 
 loaderMapping: dict[str, type[DataLoader]] = {
