@@ -24,3 +24,4 @@ members = [
 
 [project.scripts]
 convert = "gnucashConverter.__scripts__:convert"
+transfer = "gnucashConverter.__scripts__:transfer"
