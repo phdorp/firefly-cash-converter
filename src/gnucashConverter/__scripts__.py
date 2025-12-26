@@ -5,7 +5,7 @@ from gnucashConverter import convertData as cdt
 from gnucashConverter import loadData as ldb
 
 
-def main():
+def convert():
     parser = argparse.ArgumentParser("data converter")
     parser.add_argument(
         "input_file",
@@ -37,7 +37,3 @@ def main():
         converter.saveCsv(arguments.output_file)
     except Exception as e:
         print(f"An error occurred: {e}")
-
-
-if __name__ == "__main__":
-    main()

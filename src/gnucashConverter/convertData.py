@@ -31,9 +31,9 @@ class ConvertData:
         for transaction in self._transactions:
             accountName = self._findAccountName(transaction.description)
 
-            if transaction.type is data.TransactionType.WITHDRAWAL:
+            if transaction.type is data.TransactionType.WITHDRAWAL.value:
                 transaction.destination_name = accountName
-            elif transaction.type is data.TransactionType.DEPOSIT:
+            elif transaction.type is data.TransactionType.DEPOSIT.value:
                 transaction.source_name = accountName
             else:
                 raise ValueError(f"Unknown transaction type: {transaction.type}")

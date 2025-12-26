@@ -14,7 +14,7 @@ class BaseTransaction:
     description: str
     order: int
     reconciled: bool
-    type: TransactionType = dc.field(init=False)
+    type: str = dc.field(init=False)
     source_name: str | None
     destination_name: str | None
     currency_id: int | None
@@ -53,7 +53,7 @@ class BaseTransaction:
     invoice_date: str | None
 
     def __post_init__(self):
-        self.type = TransactionType.WITHDRAWAL if self.amount < 0 else TransactionType.DEPOSIT
+        self.type = TransactionType.WITHDRAWAL.value if self.amount < 0 else TransactionType.DEPOSIT.value
         self.amount = abs(self.amount)
 
 

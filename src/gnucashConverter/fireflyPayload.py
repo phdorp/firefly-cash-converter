@@ -32,7 +32,7 @@ class PayloadFactory:
 
     def postTransaction(
         self,
-        type: TransactionType,
+        type: str,
         date: str,
         amount: Union[str, float],
         description: str,
@@ -88,7 +88,7 @@ class PayloadFactory:
         """
         # Build the transaction object
         transaction: dict[str, Any] = {
-            "type": type.value,
+            "type": type,
             "date": date,
             "amount": str(amount),
             "description": description,

@@ -23,4 +23,4 @@ members = [
 ]
 
 [project.scripts]
-convert = "gnucashConverter.__main__:main"
+convert = "gnucashConverter.__scripts__:convert"
