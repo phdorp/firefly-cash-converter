@@ -1,0 +1,196 @@
+from __future__ import annotations
+
+from typing import List, Optional, Dict
+import requests
+import enum
+import ast
+
+from gnucashConverter import data
+from gnucashConverter.fireflyPayload import PayloadFactory
+
+
+class DuplicateTransactionHandle(enum.Enum):
+    """Enumeration for handling duplicate transaction detection.
+
+    Defines the behavior when a duplicate transaction is detected during
+    creation via the Firefly III API.
+
+    Attributes:
+        IGNORE (str): Ignore duplicate transactions and continue processing.
+        ERROR (str): Raise an error when a duplicate transaction is detected.
+    """
+    IGNORE = "ignore"
+    ERROR = "error"
+
+
+class FireflyInterface:
+    """Minimal Firefly III REST API interface for creating and managing transactions.
+
+    This class provides methods to interact with a Firefly III instance via its REST API,
+    including creating accounts, managing transactions, and retrieving account information.
+
+    The class handles API authentication, duplicate transaction detection, and error handling.
+    Transactions are created with a single side mapped to the provided account and a balancing
+    side using the default balance account.
+
+    Attributes:
+        _base_url (str): Base URL of the Firefly III instance (without trailing slash).
+        _api_url (str): Full API endpoint URL (base_url/api/v1).
+        _api_token (str): API token for authentication.
+        _duplicate_transaction (DuplicateTransactionHandle): How to handle duplicate transactions.
+        _default_balance_account_id (Optional[int]): Default account ID for balancing transactions.
+        _payloadFactory (PayloadFactory): Factory for building API payloads.
+        _session (requests.Session): Persistent HTTP session with authentication headers.
+
+    Notes:
+        - Requires a Firefly III API token with permissions to create transactions and accounts.
+        - Provide account mappings to convert between internal account names and Firefly account IDs.
+        - For each transaction created, a balancing side is generated to keep transactions balanced.
+    """
+
+    def __init__(
+        self,
+        base_url: str,
+        api_token: str,
+        default_balance_account_id: Optional[int] = None,
+        duplicate_transaction: DuplicateTransactionHandle | str = DuplicateTransactionHandle.ERROR,
+    ) -> None:
+        """Initialize the Firefly III API interface.
+
+        Args:
+            base_url (str): Base URL of the Firefly III instance (e.g., "https://firefly.example.com").
+            api_token (str): API token for authentication with the Firefly III instance.
+            default_balance_account_id (Optional[int]): Default account ID to use for balancing transactions.
+                Defaults to None.
+            duplicate_transaction (DuplicateTransactionHandle | str): How to handle duplicate transactions.
+                Can be a DuplicateTransactionHandle enum or string value ("ignore" or "error").
+                Defaults to DuplicateTransactionHandle.ERROR.
+        """
+        self._base_url = base_url.rstrip("/")
+        self._api_url = f"{self._base_url}/api/v1"
+        self._api_token = api_token
+        self._duplicate_transaction = (
+            duplicate_transaction
+            if isinstance(duplicate_transaction, DuplicateTransactionHandle)
+            else DuplicateTransactionHandle(duplicate_transaction)
+        )
+        self._default_balance_account_id = default_balance_account_id
+        self._payloadFactory = PayloadFactory()
+        self._session = requests.Session()
+        self._session.headers.update(
+            {
+                "Authorization": f"Bearer {self._api_token}",
+                "accept": "application/json",
+                "Content-Type": "application/json",
+            }
+        )
+
+    def _postTransaction(self, transaction: data.BaseTransaction) -> requests.Response:
+        """Post a transaction to the Firefly III API with error handling.
+
+        Sends a transaction to the API and handles duplicate transaction detection
+        based on the configured duplicate transaction handling mode.
+
+        Args:
+            transaction (data.BaseTransaction): The transaction to post.
+
+        Returns:
+            requests.Response: The HTTP response from the API.
+
+        Raises:
+            Exception: If the API returns an error and duplicate handling is not set to IGNORE.
+            requests.HTTPError: If the HTTP request fails with a non-422 status code.
+        """
+        payload = self._payloadFactory.toPayload(transaction)
+        url = f"{self._api_url}/transactions"
+        resp = self._session.post(url, json=payload)
+
+        if resp.status_code == 422:
+            errorMessage: str = ast.literal_eval(resp.text).get("message")
+            isDuplicate = "duplicate" in errorMessage.lower()
+            if isDuplicate and self._duplicate_transaction == DuplicateTransactionHandle.IGNORE:
+                print(f"Duplicate transaction detected, ignoring: {transaction}")
+                return resp
+            else:
+                raise Exception(f"Error creating transaction: {errorMessage}")
+
+        resp.raise_for_status()
+        return resp
+
+    def getAccounts(self) -> List[data.GetAccount]:
+        """Retrieve the list of accounts from the Firefly III server.
+
+        Fetches all accounts configured in the Firefly III instance and converts
+        the API response data into GetAccount objects.
+
+        Returns:
+            List[data.GetAccount]: List of account objects with their attributes and metadata.
+
+        Raises:
+            requests.HTTPError: If the HTTP request fails.
+        """
+        url = f"{self._api_url}/accounts"
+        response = self._session.get(url)
+        response.raise_for_status()
+        accountResponses: Dict = response.json().get("data", [])
+
+        accounts: List[data.GetAccount] = []
+        for response in accountResponses:
+            accountData = response.get("attributes", {})
+            accountData["id"] = response.get("id")
+            accounts.append(data.GetAccount(**accountData))
+        return accounts
+
+    def createAccount(self, account: data.PostAccount) -> requests.Response:
+        """Create a new account on the Firefly III server.
+
+        Args:
+            account (data.PostAccount): The account object to create.
+
+        Returns:
+            requests.Response: The HTTP response from the Firefly API.
+
+        Raises:
+            requests.HTTPError: If the HTTP request fails.
+        """
+        url = f"{self._api_url}/accounts"
+        payload = self._payloadFactory.toPayload(account)
+        resp = self._session.post(url, json=payload)
+        resp.raise_for_status()
+        return resp
+
+    def deleteAccount(self, account_id: str) -> requests.Response:
+        """Delete an account on the Firefly III server.
+
+        Args:
+            account_id (str): The Firefly account ID to delete.
+
+        Returns:
+            requests.Response: The HTTP response from the Firefly API.
+
+        Raises:
+            requests.HTTPError: If the HTTP request fails.
+        """
+        url = f"{self._api_url}/accounts/{account_id}"
+        resp = self._session.delete(url)
+        resp.raise_for_status()
+        return resp
+
+    def createTransaction(self, transaction: data.BaseTransaction) -> requests.Response:
+        """Create a single transaction on the Firefly III server.
+
+        Posts a transaction to the Firefly III API. Handles duplicate transaction
+        detection and error reporting based on the configured duplicate handling mode.
+
+        Args:
+            transaction (data.BaseTransaction): The transaction to create.
+
+        Returns:
+            requests.Response: The HTTP response from the Firefly API.
+
+        Raises:
+            Exception: If the API returns an error (422 status) and duplicate handling
+                is not set to IGNORE.
+            requests.HTTPError: If the HTTP request fails with a non-422 status code.
+        """
+        return self._postTransaction(transaction)
