@@ -41,15 +41,6 @@ class DataLoader(abc.ABC):
     field mapping, type conversion, and filtering of transaction data.
     """
 
-    @property
-    def transactions(self) -> List[data.BaseTransaction]:
-        """Return the list of parsed transactions.
-
-        Returns:
-            List[data.BaseTransaction]: Currently-loaded transactions.
-        """
-        return self._transactions
-
     def __init__(self, dataPath: str):
         """Initialize the data loader with the path to the data file.
 
@@ -57,7 +48,6 @@ class DataLoader(abc.ABC):
             dataPath (str): Filesystem path to the data file to be loaded.
         """
         self._dataPath = dataPath
-        self._transactions: List[data.BaseTransaction] = []
 
         self._fieldTypes: List[type] = []
         for field in dc.fields(data.BaseTransaction):
@@ -66,7 +56,7 @@ class DataLoader(abc.ABC):
                     self._fieldTypes.insert(Fields[field.name].value, field.type)
                 elif isinstance(field.type, UnionType):
                     unionTypes: Tuple[type, NoneType] = get_args(field.type)
-                    assert len(unionTypes) == 2 and unionTypes[1] is NoneType, "Second type must be NoneType"
+                    assert len(unionTypes) == 2 and unionTypes[1] is NoneType, "Second type in BaseTransaction field union must be NoneType"
                     self._fieldTypes.insert(Fields[field.name].value, unionTypes[0])
 
         self._fieldAliases: Dict[str, Fields] = {field.name: field for field in Fields}
@@ -75,7 +65,7 @@ class DataLoader(abc.ABC):
         self._fieldMergeSep = " - "  # Separator used when merging multiple entries into one field
 
     @abc.abstractmethod
-    def load(self):
+    def load(self) -> List[data.BaseTransaction]:
         """Load and parse data from the source file into `self._transactions`.
 
         Implementations should populate `self._transactions` with a list of
@@ -83,7 +73,7 @@ class DataLoader(abc.ABC):
         `self._dataPath`.
 
         Returns:
-            List[data.Transaction]: Parsed transactions.
+            List[data.BaseTransaction]: Parsed transactions.
         """
 
 
@@ -126,7 +116,7 @@ class TableDataLoader(DataLoader):
 
         return content.replace(",", ";")
 
-    def _getTransactions(self, dataFrame: pd.DataFrame, colIdcs: List[int]) -> List[data.BaseTransaction]:
+    def _getTransactions(self, dataFrame: pd.DataFrame, columnIdcs: List[int]) -> List[data.BaseTransaction]:
         """Extract transactions from a tabular DataFrame using resolved column indices.
 
         This helper iterates over data rows after the header row (as defined by
@@ -135,7 +125,7 @@ class TableDataLoader(DataLoader):
 
         Args:
             dataFrame (pd.DataFrame): The loaded table-like data.
-            colIdcs (List[int]): Column indices aligned with `self._fieldAliases`.
+            columnIdcs (List[int]): Column indices aligned with `self._fieldAliases`.
 
         Returns:
             List[data.BaseTransaction]: Parsed transactions as PostTransaction objects.
@@ -145,10 +135,10 @@ class TableDataLoader(DataLoader):
             # Create a dictionary to hold the current transaction data
             row = dataFrame.values[rowIdx]
             transactionData: Dict[str, Any] = {}
-            for colIdx, fieldAlias in zip(colIdcs, self._fieldAliases):
+            for columnIdx, fieldAlias in zip(columnIdcs, self._fieldAliases):
                 field = self._fieldAliases[fieldAlias]
                 storedData = transactionData.get(field.name, None)
-                inputData = self._fieldTypes[field](self._fieldFilters[field](row[colIdx]))
+                inputData = self._fieldTypes[field](self._fieldFilters[field](row[columnIdx]))
 
                 if storedData is None:
                     transactionData[field.name] = inputData

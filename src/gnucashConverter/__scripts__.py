@@ -30,10 +30,10 @@ def convert():
     arguments = parser.parse_args()
 
     loader = ldb.loaderMapping[arguments.source](arguments.input_file, arguments.account_name)
-    loader.load()
+    transactions = loader.load()
 
     accountMap = toml.load(arguments.account_map) if arguments.account_map else None
-    converter = cdt.ConvertData(loader.transactions, accountMap)
+    converter = cdt.ConvertData(transactions, accountMap)
     converter.assignAccounts()
     converter.saveCsv(arguments.output_file)
 
@@ -60,12 +60,12 @@ def transfer():
     arguments = parser.parse_args()
 
     loader = ldb.loaderMapping[arguments.source](arguments.input_file, arguments.account_name)
-    loader.load()
+    transactions = loader.load()
 
     interfaceConfig = toml.load(arguments.interface_config)
     interface = ffi.FireflyInterface(**interfaceConfig)
 
-    for transaction in loader.transactions:
+    for transaction in transactions:
         response = interface.createTransaction(transaction)
         print(f"Processed transaction with response: {response.status_code}")
 
