@@ -29,14 +29,13 @@ class DataLoader(abc.ABC):
         """
         return self._transactions
 
-    def __init__(self, dataPath: str, accountName: Optional[str] = None):
+    def __init__(self, dataPath: str):
         """Initialize the data loader with the path to the data file.
 
         Args:
             dataPath (str): Filesystem path to the data file to be loaded.
         """
         self._dataPath = dataPath
-        self._accountName = str(accountName)
         self._transactions: List[data.BaseTransaction] = []
 
         self._fieldTypes: List[type] = []
@@ -50,6 +49,7 @@ class DataLoader(abc.ABC):
                     self._fieldTypes.insert(Fields[field.name].value, unionTypes[0])
 
         self._fieldAliases: Dict[str, Fields] = {field.name: field for field in Fields}
+        self._dependentFields: Dict[Fields, Callable[[Dict], Any]] = {}
         self._fieldFilters: List[Callable[[str], str]] = [lambda content: content for _ in Fields]
         self._fieldMergeSep = " - "  # Separator used when merging multiple entries into one field
 
@@ -72,7 +72,7 @@ class TableDataLoader(DataLoader):
     Introduces the headerRowIdx attribute to specify the index of the header row in the data file.
     """
 
-    def __init__(self, headerRowIdx: int, dataPath: str, accountName: Optional[str] = None):
+    def __init__(self, headerRowIdx: int, dataPath: str, **kwargs):
         """Initialize a table-style loader.
 
         Args:
@@ -80,7 +80,7 @@ class TableDataLoader(DataLoader):
                 data (used to locate column names).
             dataPath (str): Path to the source data file.
         """
-        super().__init__(dataPath, accountName)
+        super().__init__(dataPath)
         self._headerRowIdx = headerRowIdx
         self._fieldFilters[Fields.description] = self._descriptionFilter  # Remove NaN descriptions
 
@@ -133,15 +133,8 @@ class TableDataLoader(DataLoader):
 
             # Only add the transaction if it contains data
             if len(transactionData) > 0:
-                transactionType = transactionData.get(Fields.type.name, None)
-
-                if transactionType is None:
-                    isWithdrawal = transactionData[Fields.amount.name] < 0
-
-                    if isWithdrawal:
-                        transactionData[Fields.source_name.name] = self._accountName
-                    else:
-                        transactionData[Fields.destination_name.name] = self._accountName
+                for field, function in self._dependentFields.items():
+                    transactionData[field.name] = function(transactionData)
 
                 transactions.append(data.PostTransaction(**transactionData))
 
@@ -171,14 +164,14 @@ class TableDataLoader(DataLoader):
 
 class DataLoaderXlsx(TableDataLoader):
 
-    def __init__(self, headerRowIdx: int, dataPath: str, accountName: Optional[str] = None):
+    def __init__(self, headerRowIdx: int, dataPath: str, **kwargs):
         """Create an XLSX table loader.
 
         Args:
             headerRowIdx (int): Index of the header row in the spreadsheet.
             dataPath (str): Path to the Excel file.
         """
-        super().__init__(headerRowIdx, dataPath, accountName)
+        super().__init__(headerRowIdx, dataPath, **kwargs)
 
     def load(self) -> List[data.Transaction]:
         """Load data from an Excel file and populate ``self._transactions``.
@@ -203,7 +196,7 @@ class DataLoaderCsv(TableDataLoader):
         dataPath (str): Path to the CSV file to load.
     """
 
-    def __init__(self, separator: str, headerRowIdx: int, dataPath: str, accountName: Optional[str] = None):
+    def __init__(self, separator: str, headerRowIdx: int, dataPath: str, **kwargs):
         """Create a CSV table loader.
 
         Args:
@@ -212,7 +205,7 @@ class DataLoaderCsv(TableDataLoader):
             dataPath (str): Path to the CSV file.
         """
         self._separator = separator
-        super().__init__(headerRowIdx, dataPath, accountName)
+        super().__init__(headerRowIdx, dataPath, **kwargs)
 
     def load(self) -> List[data.Transaction]:
         """Load data from a CSV file and populate ``self._transactions``.
@@ -236,26 +229,44 @@ class DataLoaderCommon(DataLoaderCsv):
         dataPath (str): Path to the CSV file to load.
     """
 
-    def __init__(self, dataPath: str, accountName: Optional[str] = None):
+    def __init__(self, dataPath: str, **kwargs):
         """Create a common CSV table loader.
 
         Args:
             dataPath (str): Path to the CSV file.
         """
-        accountName = accountName if accountName is not None else "common"
-        super().__init__(separator=",", headerRowIdx=0, dataPath=dataPath, accountName=accountName)
+        super().__init__(separator=",", headerRowIdx=0, dataPath=dataPath, **kwargs)
 
 
-class DataLoaderPaypal(DataLoaderCsv):
+class DataLoaderUncommon:
+    def __init__(self, accountName: str):
+        self._dependentFields = {
+            Fields.type: lambda transactionData: (
+                data.TransactionType.WITHDRAWAL.value
+                if float(transactionData[Fields.amount.name]) < 0
+                else data.TransactionType.DEPOSIT.value
+            ),
+            Fields.source_name: lambda transactionData: (
+                accountName if float(transactionData[Fields.amount.name]) < 0 else None
+            ),
+            Fields.destination_name: lambda transactionData: (
+                accountName if float(transactionData[Fields.amount.name]) >= 0 else None
+            ),
+            Fields.amount: lambda transactionData: abs(float(transactionData[Fields.amount.name])),
+        }
 
-    def __init__(self, dataPath: str, accountName: Optional[str] = None):
+
+class DataLoaderPaypal(DataLoaderCsv, DataLoaderUncommon):
+
+    def __init__(self, dataPath: str, accountName: Optional[str] = None, **kwargs):
         """Initialize a PayPal CSV loader.
 
         Args:
             dataPath (str): Path to the PayPal CSV file.
         """
         accountName = accountName if accountName is not None else "paypal"
-        super().__init__(separator=",", headerRowIdx=0, dataPath=dataPath, accountName=accountName)
+        DataLoaderCsv.__init__(self, separator=",", headerRowIdx=0, dataPath=dataPath, **kwargs)
+        DataLoaderUncommon.__init__(self, accountName)
 
         self._fieldAliases = {
             "Beschreibung": Fields.description,
@@ -269,16 +280,17 @@ class DataLoaderPaypal(DataLoaderCsv):
         self._fieldFilters[Fields.date] = lambda content: "-".join(str(content).split("T")[0].split(".")[::-1])
 
 
-class DataLoaderBarclays(DataLoaderXlsx):
+class DataLoaderBarclays(DataLoaderXlsx, DataLoaderUncommon):
 
-    def __init__(self, dataPath: str, accountName: Optional[str] = None):
+    def __init__(self, dataPath: str, accountName: Optional[str] = None, **kwargs):
         """Initialize a Barclays XLSX loader.
 
         Args:
             dataPath (str): Path to the Barclays Excel file.
         """
         accountName = accountName if accountName is not None else "barclays"
-        super().__init__(headerRowIdx=11, dataPath=dataPath, accountName=accountName)
+        DataLoaderXlsx.__init__(self, headerRowIdx=11, dataPath=dataPath, **kwargs)
+        DataLoaderUncommon.__init__(self, accountName)
 
         self._fieldAliases = {
             "Beschreibung": Fields.description,
@@ -291,16 +303,17 @@ class DataLoaderBarclays(DataLoaderXlsx):
         self._fieldFilters[Fields.date] = lambda content: "-".join(str(content).split(".")[::-1])
 
 
-class DataLoaderTr(DataLoaderCsv):
+class DataLoaderTr(DataLoaderCsv, DataLoaderUncommon):
 
-    def __init__(self, dataPath: str, accountName: Optional[str] = None):
+    def __init__(self, dataPath: str, accountName: Optional[str] = None, **kwargs):
         """Initialize a Trade Republic CSV loader.
 
         Args:
             dataPath (str): Path to the Trade Republic CSV file.
         """
         accountName = accountName if accountName is not None else "trade_republic"
-        super().__init__(separator=";", headerRowIdx=0, dataPath=dataPath, accountName=accountName)
+        DataLoaderCsv.__init__(self, separator=";", headerRowIdx=0, dataPath=dataPath, **kwargs)
+        DataLoaderUncommon.__init__(self, accountName)
 
         self._fieldAliases = {
             "Note": Fields.description,
@@ -310,8 +323,9 @@ class DataLoaderTr(DataLoaderCsv):
         }
 
 
-loaderMapping: dict[str, type[DataLoader]] = {
+loaderMapping: dict[str, type[TableDataLoader]] = {
     "barclays": DataLoaderBarclays,
     "paypal": DataLoaderPaypal,
     "trade_republic": DataLoaderTr,
+    "common": DataLoaderCommon,
 }

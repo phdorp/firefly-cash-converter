@@ -87,7 +87,7 @@ class TestLoaderTr(unittest.TestCase):
 
 class TestLoaderCommon(TestLoaderTr):
     def setUp(self) -> None:
-        self._loader = ldb.DataLoaderCommon("test/data/common.csv", "tr")
+        self._loader = ldb.DataLoaderCommon("test/data/common.csv")
 
 if __name__ == "__main__":
     unittest.main()

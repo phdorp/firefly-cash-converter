@@ -20,17 +20,19 @@ class TestFireflyInterface(unittest.TestCase):
         transactions = [
             data.PostTransaction(
                 date="2025-05-30",
-                amount=-1619.25,
+                amount=1619.25,
                 description="Test1",
                 source_name="Expenses:Shopping",
                 destination_name="Assets:Current",
+                type="withdrawal",
             ),
             data.PostTransaction(
                 date="2024-05-30",
-                amount=-13.32,
+                amount=13.32,
                 description="Test2",
                 source_name="Expenses:Misc",
                 destination_name="Assets:Current",
+                type="withdrawal",
             ),
         ]
 

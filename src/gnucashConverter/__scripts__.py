@@ -22,13 +22,13 @@ def convert():
     parser.add_argument(
         "--source",
         type=str,
-        choices=["barclays", "paypal", "trade_republic"],
+        choices=["barclays", "paypal", "trade_republic", "common"],
     )
     parser.add_argument("--account_name", type=str, help="Name of the account to assign to loaded transactions.", default=None)
 
     arguments = parser.parse_args()
 
-    loader: ldb.DataLoader = ldb.loaderMapping[arguments.source](arguments.input_file, arguments.account_name)
+    loader = ldb.loaderMapping[arguments.source](arguments.input_file, arguments.account_name)
     loader.load()
 
     try:
@@ -61,7 +61,7 @@ def transfer():
     parser.add_argument("--account_name", type=str, help="Name of the account to assign to loaded transactions.", default=None)
     arguments = parser.parse_args()
 
-    loader: ldb.DataLoader = ldb.loaderMapping[arguments.source](arguments.input_file, arguments.account_name)
+    loader = ldb.loaderMapping[arguments.source](arguments.input_file, arguments.account_name)
     loader.load()
 
     try:
