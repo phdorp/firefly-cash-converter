@@ -365,7 +365,7 @@ class PostAccount(BaseAccount):
 
     def __setattr__(self, key, value):
         if key == "type" and "type" in self.__dict__:
-            raise AttributeError("type is read-only for PostAssetAccount")
+            raise AttributeError("type is read-only for PostAccount")
         super().__setattr__(key, value)
 
 
