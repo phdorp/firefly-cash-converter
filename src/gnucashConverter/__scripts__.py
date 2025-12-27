@@ -23,6 +23,7 @@ def convert():
         "--source",
         type=str,
         choices=["barclays", "paypal", "trade_republic", "common"],
+        required=True,
     )
     parser.add_argument("--account_name", type=str, help="Name of the account to assign to loaded transactions.", default=None)
 
@@ -31,13 +32,10 @@ def convert():
     loader = ldb.loaderMapping[arguments.source](arguments.input_file, arguments.account_name)
     loader.load()
 
-    try:
-        accountMap = toml.load(arguments.account_map) if arguments.account_map else None
-        converter = cdt.ConvertData(loader.load(), accountMap)
-        converter.assignAccounts()
-        converter.saveCsv(arguments.output_file)
-    except Exception as e:
-        print(f"An error occurred: {e}")
+    accountMap = toml.load(arguments.account_map) if arguments.account_map else None
+    converter = cdt.ConvertData(loader.transactions, accountMap)
+    converter.assignAccounts()
+    converter.saveCsv(arguments.output_file)
 
 def transfer():
     parser = argparse.ArgumentParser("transaction transfer")
@@ -55,7 +53,7 @@ def transfer():
     parser.add_argument(
         "--source",
         type=str,
-        choices=["barclays", "paypal", "trade_republic"],
+        choices=["barclays", "paypal", "trade_republic", "common"],
         required=True,
     )
     parser.add_argument("--account_name", type=str, help="Name of the account to assign to loaded transactions.", default=None)
@@ -64,13 +62,10 @@ def transfer():
     loader = ldb.loaderMapping[arguments.source](arguments.input_file, arguments.account_name)
     loader.load()
 
-    try:
-        interfaceConfig = toml.load(arguments.interface_config)
-        interface = ffi.FireflyInterface(**interfaceConfig)
+    interfaceConfig = toml.load(arguments.interface_config)
+    interface = ffi.FireflyInterface(**interfaceConfig)
 
-        for transaction in loader.transactions:
-            response = interface.createTransaction(transaction)
-            print(f"Processed transaction with response: {response.status_code}")
+    for transaction in loader.transactions:
+        response = interface.createTransaction(transaction)
+        print(f"Processed transaction with response: {response.status_code}")
 
-    except Exception as e:
-        print(f"An error occurred: {e}")
