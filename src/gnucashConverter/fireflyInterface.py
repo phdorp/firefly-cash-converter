@@ -43,7 +43,7 @@ class FireflyInterface:
             else DuplicateTransactionHandle(duplicate_transaction)
         )
         self._default_balance_account_id = default_balance_account_id
-        self._payloadFactory = PayloadFactory(format="json")
+        self._payloadFactory = PayloadFactory()
         self._session = requests.Session()
         self._session.headers.update(
             {
