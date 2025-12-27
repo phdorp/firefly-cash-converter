@@ -11,6 +11,20 @@ from gnucashConverter import data
 
 
 class Fields(enum.IntEnum):
+    """Enumeration of supported transaction field positions.
+
+    This enum defines the standard field positions for transaction data,
+    allowing flexible mapping of source column indices to transaction fields.
+
+    Attributes:
+        description (int): Field position for transaction description.
+        date (int): Field position for transaction date.
+        amount (int): Field position for transaction amount.
+        source_name (int): Field position for source account name.
+        destination_name (int): Field position for destination account name.
+        type (int): Field position for transaction type.
+    """
+
     description = 0
     date = 1
     amount = 2
@@ -20,12 +34,19 @@ class Fields(enum.IntEnum):
 
 
 class DataLoader(abc.ABC):
+    """Abstract base class for loading transaction data from various sources.
+
+    This class provides the foundation for implementing data loaders that parse
+    transaction information from different file formats and data sources. It handles
+    field mapping, type conversion, and filtering of transaction data.
+    """
+
     @property
     def transactions(self) -> List[data.BaseTransaction]:
         """Return the list of parsed transactions.
 
         Returns:
-            List[data.Transaction]: Currently-loaded transactions.
+            List[data.BaseTransaction]: Currently-loaded transactions.
         """
         return self._transactions
 
@@ -54,11 +75,11 @@ class DataLoader(abc.ABC):
         self._fieldMergeSep = " - "  # Separator used when merging multiple entries into one field
 
     @abc.abstractmethod
-    def load(self)-> List[data.Transaction]:
-        """Load and parse data from the source file into `self._data`.
+    def load(self):
+        """Load and parse data from the source file into `self._transactions`.
 
-        Implementations should populate `self._data` with a list of
-        `data.Transaction` instances parsed from the file located at
+        Implementations should populate `self._transactions` with a list of
+        `data.BaseTransaction` instances parsed from the file located at
         `self._dataPath`.
 
         Returns:
@@ -67,9 +88,15 @@ class DataLoader(abc.ABC):
 
 
 class TableDataLoader(DataLoader):
-    """
-    Base class for data loaders that operate on tabular data formats (e.g., CSV and Excel).
-    Introduces the headerRowIdx attribute to specify the index of the header row in the data file.
+    """Base class for data loaders operating on tabular data formats.
+
+    This class provides functionality for loading and parsing transaction data
+    from tabular formats such as CSV and Excel spreadsheets. It introduces
+    the headerRowIdx attribute to specify the index of the header row and provides
+    common utilities for extracting and processing tabular data.
+
+    Attributes:
+        _headerRowIdx (int): The index of the header row in the source data.
     """
 
     def __init__(self, headerRowIdx: int, dataPath: str, **kwargs):
@@ -92,7 +119,7 @@ class TableDataLoader(DataLoader):
             content (str): Raw description content.
 
         Returns:
-            str: Cleaned description.
+            str: Cleaned description with commas replaced by semicolons, or empty string if NaN.
         """
         if pd.isna(content):
             return ""
@@ -104,14 +131,14 @@ class TableDataLoader(DataLoader):
 
         This helper iterates over data rows after the header row (as defined by
         `self._headerRowIdx`), applies any field filters and type conversions,
-        and constructs `data.Transaction` objects.
+        and constructs `data.BaseTransaction` objects.
 
         Args:
             dataFrame (pd.DataFrame): The loaded table-like data.
             colIdcs (List[int]): Column indices aligned with `self._fieldAliases`.
 
         Returns:
-            List[data.Transaction]: Parsed transactions.
+            List[data.BaseTransaction]: Parsed transactions as PostTransaction objects.
         """
         transactions: List[data.BaseTransaction] = []
         for rowIdx in range(self._headerRowIdx + 1, dataFrame.shape[0]):
@@ -141,17 +168,17 @@ class TableDataLoader(DataLoader):
         return transactions
 
     def _parseData(self, dataFrame: pd.DataFrame) -> List[data.BaseTransaction]:
-        """Parse the data from tabular data ``DataFrame``.
+        """Parse the data from tabular data DataFrame.
 
         Locates the header row at ``self._headerRowIdx`` to determine the
         column indices for the fields in ``self._fieldAliases`` and
-        returns a list of parsed ``data.Transaction`` objects.
+        returns a list of parsed ``data.BaseTransaction`` objects.
 
         Args:
             dataFrame (pd.DataFrame): The spreadsheet data as a DataFrame.
 
         Returns:
-            List[data.Transaction]: Parsed transactions.
+            List[data.BaseTransaction]: Parsed transactions.
         """
 
         # Get column indices of the target fields
@@ -163,6 +190,11 @@ class TableDataLoader(DataLoader):
 
 
 class DataLoaderXlsx(TableDataLoader):
+    """Data loader for Excel (XLSX) files.
+
+    Extends TableDataLoader to provide functionality for loading and parsing
+    transaction data from Excel spreadsheets.
+    """
 
     def __init__(self, headerRowIdx: int, dataPath: str, **kwargs):
         """Create an XLSX table loader.
@@ -173,27 +205,24 @@ class DataLoaderXlsx(TableDataLoader):
         """
         super().__init__(headerRowIdx, dataPath, **kwargs)
 
-    def load(self) -> List[data.Transaction]:
-        """Load data from an Excel file and populate ``self._transactions``.
+    def load(self):
+        """Load data from an Excel file and populate `self._transactions`.
 
-        This method reads the Excel file at ``self._dataPath`` and calls
-        ``_parseData`` to convert the loaded ``DataFrame`` into
-        ``data.Transaction`` objects which are stored in ``self._transactions``.
-
-        Returns:
-            List[data.Transaction]: Parsed transactions.
+        This method reads the Excel file at `self._dataPath` and calls
+        `_parseData` to convert the loaded DataFrame into
+        `data.BaseTransaction` objects which are stored in `self._transactions`.
         """
         return self._parseData(pd.read_excel(self._dataPath))
 
 
 class DataLoaderCsv(TableDataLoader):
-    """
-    Data loader for CSV files.
-    This class loads transaction data from a CSV file, using the specified separator and header row index.
-    Args:
-        separator (str): The delimiter used in the CSV file.
-        headerRowIdx (int): The index of the header row in the CSV file.
-        dataPath (str): Path to the CSV file to load.
+    """Data loader for CSV files.
+
+    Extends TableDataLoader to load transaction data from CSV files using
+    a configurable field separator and header row index.
+
+    Attributes:
+        _separator (str): The delimiter used in the CSV file.
     """
 
     def __init__(self, separator: str, headerRowIdx: int, dataPath: str, **kwargs):
@@ -207,26 +236,22 @@ class DataLoaderCsv(TableDataLoader):
         self._separator = separator
         super().__init__(headerRowIdx, dataPath, **kwargs)
 
-    def load(self) -> List[data.Transaction]:
-        """Load data from a CSV file and populate ``self._transactions``.
+    def load(self):
+        """Load data from a CSV file and populate `self._transactions`.
 
-        Reads the CSV at ``self._dataPath`` using the configured
-        ``self._separator`` and passes the resulting ``DataFrame`` to
-        ``_parseData``. The parsed transactions are stored in
-        ``self._transactions``.
-
-        Returns:
-            List[data.Transaction]: Parsed transactions.
+        Reads the CSV at `self._dataPath` using the configured
+        `self._separator` and passes the resulting DataFrame to
+        `_parseData`. The parsed transactions are stored in
+        `self._transactions`.
         """
         return self._parseData(pd.read_csv(self._dataPath, sep=self._separator, header=None))
 
 
 class DataLoaderCommon(DataLoaderCsv):
-    """
-    Data loader for common CSV files.
-    This class loads transaction data from a common CSV file format.
-    Args:
-        dataPath (str): Path to the CSV file to load.
+    """Data loader for common CSV file format.
+
+    Specializes DataLoaderCsv for the common CSV format with standard comma
+    delimiter and header at row index 0.
     """
 
     def __init__(self, dataPath: str, **kwargs):
@@ -239,7 +264,23 @@ class DataLoaderCommon(DataLoaderCsv):
 
 
 class DataLoaderUncommon:
+    """Mixin class providing common field transformation logic for specialized loaders.
+
+    This class encapsulates dependent field transformations used by multiple
+    specialized data loaders (PayPal, Barclays, Trade Republic). It handles
+    conversion of transaction amounts to positive values and determines
+    source/destination accounts based on transaction sign.
+
+    Attributes:
+        _dependentFields (Dict[Fields, Callable]): Mapping of fields to transformation functions.
+    """
+
     def __init__(self, accountName: str):
+        """Initialize the uncommon loader with account name.
+
+        Args:
+            accountName (str): Name of the account for source/destination mapping.
+        """
         self._dependentFields = {
             Fields.type: lambda transactionData: (
                 data.TransactionType.WITHDRAWAL.value
@@ -257,12 +298,18 @@ class DataLoaderUncommon:
 
 
 class DataLoaderPaypal(DataLoaderCsv, DataLoaderUncommon):
+    """Data loader for PayPal CSV exports.
+
+    Specializes DataLoaderCsv for PayPal's CSV format, handling German-formatted
+    numbers and currency symbols, and mapping PayPal transaction amounts to source/destination accounts.
+    """
 
     def __init__(self, dataPath: str, accountName: Optional[str] = None, **kwargs):
         """Initialize a PayPal CSV loader.
 
         Args:
             dataPath (str): Path to the PayPal CSV file.
+            accountName (Optional[str]): Name of the account. Defaults to "paypal".
         """
         accountName = accountName if accountName is not None else "paypal"
         DataLoaderCsv.__init__(self, separator=",", headerRowIdx=0, dataPath=dataPath, **kwargs)
@@ -281,12 +328,18 @@ class DataLoaderPaypal(DataLoaderCsv, DataLoaderUncommon):
 
 
 class DataLoaderBarclays(DataLoaderXlsx, DataLoaderUncommon):
+    """Data loader for Barclays Excel exports.
+
+    Specializes DataLoaderXlsx for Barclays' Excel format, handling German-formatted
+    numbers and currency symbols, and mapping Barclays transaction amounts to source/destination accounts.
+    """
 
     def __init__(self, dataPath: str, accountName: Optional[str] = None, **kwargs):
         """Initialize a Barclays XLSX loader.
 
         Args:
             dataPath (str): Path to the Barclays Excel file.
+            accountName (Optional[str]): Name of the account. Defaults to "barclays".
         """
         accountName = accountName if accountName is not None else "barclays"
         DataLoaderXlsx.__init__(self, headerRowIdx=11, dataPath=dataPath, **kwargs)
@@ -304,12 +357,18 @@ class DataLoaderBarclays(DataLoaderXlsx, DataLoaderUncommon):
 
 
 class DataLoaderTr(DataLoaderCsv, DataLoaderUncommon):
+    """Data loader for Trade Republic CSV exports.
+
+    Specializes DataLoaderCsv for Trade Republic's CSV format, handling transaction
+    data and mapping amounts to source/destination accounts.
+    """
 
     def __init__(self, dataPath: str, accountName: Optional[str] = None, **kwargs):
         """Initialize a Trade Republic CSV loader.
 
         Args:
             dataPath (str): Path to the Trade Republic CSV file.
+            accountName (Optional[str]): Name of the account. Defaults to "trade_republic".
         """
         accountName = accountName if accountName is not None else "trade_republic"
         DataLoaderCsv.__init__(self, separator=";", headerRowIdx=0, dataPath=dataPath, **kwargs)
