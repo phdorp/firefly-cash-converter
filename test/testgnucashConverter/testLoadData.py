@@ -85,5 +85,9 @@ class TestLoaderTr(unittest.TestCase):
         self.assertEqual(self._loader.transactions[3].source_name, "tr")
         self.assertEqual(self._loader.transactions[3].type, data.TransactionType.WITHDRAWAL.value)
 
+class TestLoaderCommon(TestLoaderTr):
+    def setUp(self) -> None:
+        self._loader = ldb.DataLoaderCommon("test/data/common.csv", "tr")
+
 if __name__ == "__main__":
     unittest.main()

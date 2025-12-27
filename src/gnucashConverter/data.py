@@ -55,7 +55,7 @@ class BaseTransaction:
 
 @dc.dataclass
 class PostTransaction(BaseTransaction):
-    type: str = dc.field(init=False)
+    type: str = ""
     order: int = 0
     reconciled: bool = True
     source_name: str | None = None
@@ -96,8 +96,9 @@ class PostTransaction(BaseTransaction):
     invoice_date: str | None = None
 
     def __post_init__(self):
-        self.type = TransactionType.WITHDRAWAL.value if self.amount < 0 else TransactionType.DEPOSIT.value
-        self.amount = abs(self.amount)
+        if self.type == "":
+            self.type = TransactionType.WITHDRAWAL.value if self.amount < 0 else TransactionType.DEPOSIT.value
+            self.amount = abs(self.amount)
 
 
 @dc.dataclass

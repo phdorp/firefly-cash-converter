@@ -49,7 +49,7 @@ class DataLoader(abc.ABC):
                     assert len(unionTypes) == 2 and unionTypes[1] is NoneType, "Second type must be NoneType"
                     self._fieldTypes.insert(Fields[field.name].value, unionTypes[0])
 
-        self._fieldAliases: Dict[str, Fields] = {}
+        self._fieldAliases: Dict[str, Fields] = {field.name: field for field in Fields}
         self._fieldFilters: List[Callable[[str], str]] = [lambda content: content for _ in Fields]
         self._fieldMergeSep = " - "  # Separator used when merging multiple entries into one field
 
@@ -133,11 +133,16 @@ class TableDataLoader(DataLoader):
 
             # Only add the transaction if it contains data
             if len(transactionData) > 0:
-                isWithdrawal = transactionData[Fields.amount.name] < 0
-                if isWithdrawal:
-                    transactionData[Fields.source_name.name] = self._accountName
-                else:
-                    transactionData[Fields.destination_name.name] = self._accountName
+                transactionType = transactionData.get(Fields.type.name, None)
+
+                if transactionType is None:
+                    isWithdrawal = transactionData[Fields.amount.name] < 0
+
+                    if isWithdrawal:
+                        transactionData[Fields.source_name.name] = self._accountName
+                    else:
+                        transactionData[Fields.destination_name.name] = self._accountName
+
                 transactions.append(data.PostTransaction(**transactionData))
 
         return transactions
@@ -221,6 +226,24 @@ class DataLoaderCsv(TableDataLoader):
             List[data.Transaction]: Parsed transactions.
         """
         return self._parseData(pd.read_csv(self._dataPath, sep=self._separator, header=None))
+
+
+class DataLoaderCommon(DataLoaderCsv):
+    """
+    Data loader for common CSV files.
+    This class loads transaction data from a common CSV file format.
+    Args:
+        dataPath (str): Path to the CSV file to load.
+    """
+
+    def __init__(self, dataPath: str, accountName: Optional[str] = None):
+        """Create a common CSV table loader.
+
+        Args:
+            dataPath (str): Path to the CSV file.
+        """
+        accountName = accountName if accountName is not None else "common"
+        super().__init__(separator=",", headerRowIdx=0, dataPath=dataPath, accountName=accountName)
 
 
 class DataLoaderPaypal(DataLoaderCsv):
