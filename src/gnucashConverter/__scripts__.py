@@ -1,5 +1,6 @@
 import argparse
 import toml
+import subprocess
 
 from gnucashConverter import convertData as cdt
 from gnucashConverter import loadData as ldb
@@ -29,7 +30,7 @@ def convert():
 
     arguments = parser.parse_args()
 
-    loader = ldb.loaderMapping[arguments.source](arguments.input_file, arguments.account_name)
+    loader = ldb.loaderMapping[arguments.source](arguments.input_file, accountName=arguments.account_name)
     transactions = loader.load()
 
     accountMap = toml.load(arguments.account_map) if arguments.account_map else None
@@ -40,9 +41,15 @@ def convert():
 def transfer():
     parser = argparse.ArgumentParser("transaction transfer")
     parser.add_argument(
-        "input_file",
+        "source",
+        type=str,
+        choices=["barclays", "paypal", "trade_republic", "common", "pytr"],
+    )
+    parser.add_argument(
+        "--input_file",
         type=str,
         help="Path to the input file to be converted.",
+        default=None,
     )
     parser.add_argument(
         "--interface_config",
@@ -50,16 +57,19 @@ def transfer():
         help="Path to the interface configuration file.",
         required=True,
     )
-    parser.add_argument(
-        "--source",
-        type=str,
-        choices=["barclays", "paypal", "trade_republic", "common"],
-        required=True,
-    )
     parser.add_argument("--account_name", type=str, help="Name of the account to assign to loaded transactions.", default=None)
     arguments = parser.parse_args()
 
-    loader = ldb.loaderMapping[arguments.source](arguments.input_file, arguments.account_name)
+    if arguments.source == "pytr":
+        subprocess.run(["pytr", "export_transactions", "--outputdir", ".tmp"])
+        input_file = ".tmp/account_transactions.csv"
+        source = "trade_republic"
+    else:
+        assert arguments.input_file is not None, "Input file must be provided for non-pytr sources."
+        input_file = arguments.input_file
+        source = arguments.source
+
+    loader = ldb.loaderMapping[source](input_file, accountName=arguments.account_name)
     transactions = loader.load()
 
     interfaceConfig = toml.load(arguments.interface_config)

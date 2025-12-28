@@ -41,7 +41,7 @@ class DataLoader(abc.ABC):
     field mapping, type conversion, and filtering of transaction data.
     """
 
-    def __init__(self, dataPath: str):
+    def __init__(self, dataPath: str, **kwargs):
         """Initialize the data loader with the path to the data file.
 
         Args:
@@ -372,7 +372,7 @@ class DataLoaderTr(DataLoaderCsv, DataLoaderUncommon):
         }
 
 
-loaderMapping: dict[str, type[TableDataLoader]] = {
+loaderMapping: dict[str, type[DataLoader]] = {
     "barclays": DataLoaderBarclays,
     "paypal": DataLoaderPaypal,
     "trade_republic": DataLoaderTr,
