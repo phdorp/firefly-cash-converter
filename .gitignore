@@ -1,12 +1,9 @@
+# virtual environment
 /.conda
-/.lprof
-/.mypy_cache
-build
-*.lock
 
-
+# python
 *.pyc
-
 *.egg-info
 
-./data
+# temporary files
+.tmp
