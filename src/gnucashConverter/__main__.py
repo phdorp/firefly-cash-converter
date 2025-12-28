@@ -1,14 +1,14 @@
-from argparse import ArgumentParser, Namespace, _SubParsersAction
-import toml
-import subprocess
 import enum
-from typing import List, Callable, Dict
 import logging
 import sys
+from argparse import ArgumentParser, Namespace, _SubParsersAction
+from typing import Callable, Dict, List
+
+import toml
 
 from gnucashConverter import convertData as cdt
-from gnucashConverter import loadData as ldb
 from gnucashConverter import fireflyInterface as ffi
+from gnucashConverter import loadData as ldb
 
 
 class CommandType(enum.Enum):
@@ -17,6 +17,14 @@ class CommandType(enum.Enum):
 
 
 def main():
+    """Parse CLI arguments and dispatch the selected subcommand.
+
+    Creates the argument parser, registers subcommands, parses user input, and
+    invokes the mapped command handler.
+
+    Raises:
+        KeyError: If the provided command does not have a registered handler.
+    """
     parser = ArgumentParser("cash")
     subparsers = parser.add_subparsers(dest="command", required=True)
     for defineParser in PARSER_DEFINITIONS:
@@ -27,13 +35,19 @@ def main():
 
 
 def defineTransferParser(subparsers: _SubParsersAction):
+    """Define the `transfer` subcommand and its arguments.
+
+    Args:
+        subparsers (_SubParsersAction): Subparser collection to which the
+            transfer parser is added.
+    """
     parser: ArgumentParser = subparsers.add_parser(
         CommandType.TRANSFER.value, help="Transfer transactions to Firefly III"
     )
     parser.add_argument(
         "source",
         type=str,
-        choices=["barclays", "paypal", "trade_republic", "common", "pytr"],
+        choices=["barclays", "paypal", "trade_republic", "common"],
     )
     parser.add_argument(
         "--interface_config",
@@ -44,9 +58,28 @@ def defineTransferParser(subparsers: _SubParsersAction):
     parser.add_argument(
         "--account_name", type=str, help="Name of the account to assign to loaded transactions.", default=None
     )
+    parser.add_argument(
+        "--input_directory",
+        type=str,
+        help="Path to the input file to be converted.",
+        default="tmp",
+    )
+    parser.add_argument(
+        "--input_name",
+        type=str,
+        help="Name of the input file to be converted.",
+        default=None,
+        required=False,
+    )
 
 
 def defineConvertParser(subparsers: _SubParsersAction):
+    """Define the `convert` subcommand and its arguments.
+
+    Args:
+        subparsers (_SubParsersAction): Subparser collection to which the
+            convert parser is added.
+    """
     parser: ArgumentParser = subparsers.add_parser(
         CommandType.CONVERT.value, help="Convert transaction data to Firefly III transactions"
     )
@@ -82,6 +115,11 @@ PARSER_DEFINITIONS: List[Callable[[_SubParsersAction], None]] = [
 
 
 def convert(arguments: Namespace):
+    """Load source data, convert to Firefly format, and save as CSV.
+
+    Args:
+        arguments (Namespace): Parsed CLI arguments.
+    """
     loader = ldb.loaderMapping[arguments.source](arguments.input_file, accountName=arguments.account_name)
     transactions = loader.load()
 
@@ -90,16 +128,16 @@ def convert(arguments: Namespace):
 
 
 def transfer(arguments: Namespace):
-    if arguments.source == "pytr":
-        subprocess.run(["pytr", "export_transactions", "--outputdir", ".tmp"])
-        input_file = ".tmp/account_transactions.csv"
-        source = "trade_republic"
-    else:
-        assert arguments.input_file is not None, "Input file must be provided for non-pytr sources."
-        input_file = arguments.input_file
-        source = arguments.source
+    """Load source data and push transactions to Firefly via the configured interface.
 
-    loader = ldb.loaderMapping[source](input_file, accountName=arguments.account_name)
+    Args:
+        arguments (Namespace): Parsed CLI arguments.
+    """
+    inputName = arguments.source if arguments.input_name is None else arguments.input_name
+    accountName = arguments.source if arguments.account_name is None else arguments.account_name
+    inputFile = f"{arguments.input_directory}/{inputName}.csv"
+
+    loader = ldb.loaderMapping[arguments.source](inputFile, accountName=accountName)
     transactions = loader.load()
 
     interfaceConfig = toml.load(arguments.interface_config)
