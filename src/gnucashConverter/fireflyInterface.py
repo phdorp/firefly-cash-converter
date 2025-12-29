@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import List, Optional, Dict
-import requests
-import enum
 import ast
+import enum
+from typing import Dict, List, Optional, overload
+
+import requests
 
 from gnucashConverter import data
 from gnucashConverter.fireflyPayload import PayloadFactory
@@ -175,6 +176,22 @@ class FireflyInterface:
         resp = self._session.delete(url)
         resp.raise_for_status()
         return resp
+
+    @overload
+    def deleteAccounts(self) -> None:
+        pass
+
+    @overload
+    def deleteAccounts(self, account_ids: List[str]) -> None:
+        pass
+
+    def deleteAccounts(self, account_ids: Optional[List[str]] = None) -> None:
+        if account_ids is None:
+            accounts = self.getAccounts()
+            account_ids = [account.id for account in accounts]
+
+        for account_id in account_ids:
+            self.deleteAccount(account_id)
 
     def createTransaction(self, transaction: data.BaseTransaction) -> requests.Response:
         """Create a single transaction on the Firefly III server.
