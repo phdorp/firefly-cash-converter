@@ -24,13 +24,13 @@ def main():
 
 
 if __name__ == "__main__":
+    log = logging.getLogger(__name__)
+
     try:
         main()
     except KeyboardInterrupt:
-        log = logging.getLogger(__name__)
         log.info("Exiting...")
-        sys.exit()
+        sys.exit(130)
     except Exception as e:
-        log = logging.getLogger(__name__)
         log.fatal(e)
         raise
