@@ -193,6 +193,22 @@ class FireflyInterface:
         for account_id in account_ids:
             self.deleteAccount(account_id)
 
+    def deleteTransaction(self, transaction_id: str) -> requests.Response:
+        """Delete a transaction on the Firefly III server.
+
+        Args:
+            transaction_id (str): The transaction journal ID to delete.
+
+        Returns:
+            requests.Response: The HTTP response from the Firefly API.
+
+        Raises:
+            requests.HTTPError: If the HTTP request fails.
+        """
+        url = f"{self._api_url}/transactions/{transaction_id}"
+        resp = self._session.delete(url)
+        resp.raise_for_status()
+        return resp
     def createTransaction(self, transaction: data.BaseTransaction) -> requests.Response:
         """Create a single transaction on the Firefly III server.
 
@@ -211,3 +227,48 @@ class FireflyInterface:
             requests.HTTPError: If the HTTP request fails with a non-422 status code.
         """
         return self._postTransaction(transaction)
+
+    def getTransactions(
+        self,
+        limit: Optional[int] = None,
+        page: Optional[int] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        type: Optional[str] = None,
+    ) -> List[data.GetTransaction]:
+        """Retrieve the list of transactions from the Firefly III server.
+
+        Fetches transactions from the Firefly III instance with optional filtering
+        and pagination. Converts the API response data into GetTransaction objects.
+
+        Args:
+            limit (Optional[int]): Number of items per page. Defaults to None.
+            page (Optional[int]): Page number for pagination. Defaults to None.
+            start (Optional[str]): Start date (YYYY-MM-DD format). Defaults to None.
+            end (Optional[str]): End date (YYYY-MM-DD format). Defaults to None.
+            type (Optional[str]): Filter by transaction type (withdrawal, deposit, etc.). Defaults to None.
+
+        Returns:
+            List[data.GetTransaction]: List of transaction objects with their attributes and metadata.
+
+        Raises:
+            requests.HTTPError: If the HTTP request fails.
+        """
+        url = f"{self._api_url}/transactions"
+        params = self._payloadFactory.getTransactions(limit, page, start, end, type)
+        response = self._session.get(url, params=params)
+        response.raise_for_status()
+        transactionResponses: Dict = response.json().get("data", [])
+
+        transactions: List[data.GetTransaction] = []
+
+        for response in transactionResponses:
+            transactionData = response.get("attributes", {})
+            # The transactions array contains the actual transaction splits
+            transactionSplits = transactionData.get("transactions", [])
+            for split in transactionSplits:
+                split["transaction_id"] = response.get("id")
+                split["transaction_journal_id"] = split.get("transaction_journal_id")
+                split["user"] = split.get("user")
+                transactions.append(data.GetTransaction(**split))
+        return transactions
