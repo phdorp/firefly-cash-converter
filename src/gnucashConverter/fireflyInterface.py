@@ -20,6 +20,7 @@ class DuplicateTransactionHandle(enum.Enum):
         IGNORE (str): Ignore duplicate transactions and continue processing.
         ERROR (str): Raise an error when a duplicate transaction is detected.
     """
+
     IGNORE = "ignore"
     ERROR = "error"
 
@@ -209,6 +210,25 @@ class FireflyInterface:
         resp = self._session.delete(url)
         resp.raise_for_status()
         return resp
+
+    def purgeUserData(self, user_id: Optional[int] = None) -> requests.Response:
+        """Purge all data for a user from the Firefly III server.
+
+        Args:
+            user_id (Optional[int]): ID of the user to purge. Defaults to current authenticated user.
+
+        Returns:
+            requests.Response: The HTTP response from the Firefly API.
+
+        Raises:
+            requests.HTTPError: If the HTTP request fails.
+        """
+        url = f"{self._api_url}/data/purge"
+        params = {"user": user_id} if user_id is not None else None
+        resp = self._session.delete(url, params=params)
+        resp.raise_for_status()
+        return resp
+
     def createTransaction(self, transaction: data.BaseTransaction) -> requests.Response:
         """Create a single transaction on the Firefly III server.
 
