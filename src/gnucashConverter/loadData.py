@@ -97,7 +97,7 @@ class TableDataLoader(DataLoader):
                 data (used to locate column names).
             dataPath (str): Path to the source data file.
         """
-        super().__init__(dataPath)
+        super().__init__(dataPath, **kwargs)
         self._headerRowIdx = headerRowIdx
         self._fieldFilters[Fields.description] = self._descriptionFilter  # Remove NaN descriptions
 
