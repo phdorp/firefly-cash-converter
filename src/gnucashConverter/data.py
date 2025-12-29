@@ -105,9 +105,9 @@ class GetTransaction(BaseTransaction):
     transaction metadata, user information, and related entity details.
 
     Attributes:
-        transaction_id (str | None): Transaction identifier.
-        transaction_journal_id (str): ID of the underlying transaction journal.
-        user (str): User ID who created the transaction.
+        transaction_id (int): Transaction identifier. Defaults to 0.
+        transaction_journal_id (str | None): ID of the underlying transaction journal. Defaults to None.
+        user (str | None): User ID who created the transaction. Defaults to None.
         created_at (str | None): Transaction creation timestamp. Defaults to None.
         updated_at (str | None): Last update timestamp. Defaults to None.
         currency_name (str | None): Transaction currency name. Defaults to None.
@@ -116,6 +116,11 @@ class GetTransaction(BaseTransaction):
         foreign_currency_name (str | None): Foreign currency name. Defaults to None.
         foreign_currency_symbol (str | None): Foreign currency symbol. Defaults to None.
         foreign_currency_decimal_places (int | None): Foreign currency decimal places. Defaults to None.
+        primary_currency_id (int | None): Primary currency ID. Defaults to None.
+        primary_currency_code (str | None): Primary currency code. Defaults to None.
+        primary_currency_name (str | None): Primary currency name. Defaults to None.
+        primary_currency_symbol (str | None): Primary currency symbol. Defaults to None.
+        primary_currency_decimal_places (int | None): Primary currency decimal places. Defaults to None.
         source_iban (str | None): Source account IBAN. Defaults to None.
         source_type (str | None): Source account type. Defaults to None.
         destination_iban (str | None): Destination account IBAN. Defaults to None.
@@ -128,6 +133,18 @@ class GetTransaction(BaseTransaction):
         recurrence_id (str | None): Associated recurring transaction ID. Defaults to None.
         recurrence_total (int | None): Total number of recurrences. Defaults to None.
         recurrence_count (int | None): Current recurrence count. Defaults to None.
+        object_has_currency_setting (bool | None): Whether object has currency setting. Defaults to None.
+        pc_amount (str | None): Primary currency amount. Defaults to None.
+        pc_foreign_amount (str | None): Primary currency foreign amount. Defaults to None.
+        source_balance_after (str | None): Source account balance after transaction. Defaults to None.
+        source_balance_dirty (str | None): Source account balance dirty flag. Defaults to None.
+        pc_source_balance_after (str | None): Primary currency source balance after transaction. Defaults to None.
+        destination_balance_after (str | None): Destination account balance after transaction. Defaults to None.
+        destination_balance_dirty (str | None): Destination account balance dirty flag. Defaults to None.
+        pc_destination_balance_after (str | None): Primary currency destination balance after transaction. Defaults to None.
+        subscription_id (str | None): Associated subscription ID. Defaults to None.
+        subscription_name (str | None): Associated subscription name. Defaults to None.
+        original_source (str | None): Original source of transaction. Defaults to None.
     """
 
     transaction_id: int = 0
