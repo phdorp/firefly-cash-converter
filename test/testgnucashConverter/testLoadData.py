@@ -1,12 +1,12 @@
 import unittest
 
-from gnucashConverter import loadData as ldb
 from gnucashConverter import data
+from gnucashConverter import loadData as ldb
 
 
 class TestLoaderBarclays(unittest.TestCase):
     def setUp(self) -> None:
-        self._loader = ldb.DataLoaderBarclays("test/data/barclays.xlsx", "Barclays")
+        self._loader = ldb.DataLoaderBarclays("test/data/barclays", "Barclays")
 
     def testLoad(self):
         """
@@ -29,7 +29,7 @@ class TestLoaderBarclays(unittest.TestCase):
 
 class TestLoaderPaypal(unittest.TestCase):
     def setUp(self) -> None:
-        self._loader = ldb.DataLoaderPaypal("test/data/paypal.csv", "Paypal")
+        self._loader = ldb.DataLoaderPaypal("test/data/paypal", "Paypal")
 
     def testLoad(self):
         """
@@ -52,7 +52,7 @@ class TestLoaderPaypal(unittest.TestCase):
 
 class TestLoaderTr(unittest.TestCase):
     def setUp(self) -> None:
-        self._loader = ldb.DataLoaderTr("test/data/trade_republic.csv", "tr")
+        self._loader = ldb.DataLoaderTr("test/data/trade_republic", "tr")
 
     def testLoad(self):
         """
@@ -87,7 +87,7 @@ class TestLoaderTr(unittest.TestCase):
 
 class TestLoaderCommon(TestLoaderTr):
     def setUp(self) -> None:
-        self._loader = ldb.DataLoaderCommon("test/data/common.csv")
+        self._loader = ldb.DataLoaderCommon("test/data/common")
 
 
 if __name__ == "__main__":
