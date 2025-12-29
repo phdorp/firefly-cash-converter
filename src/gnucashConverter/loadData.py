@@ -1,8 +1,8 @@
 import abc
 import dataclasses as dc
 import enum
-from typing import Any, Callable, Dict, List, get_args, Tuple, Optional
-from types import UnionType, NoneType
+from types import NoneType, UnionType
+from typing import Any, Callable, Dict, List, Optional, Tuple, get_args
 
 import numpy as np
 import pandas as pd
@@ -193,7 +193,7 @@ class DataLoaderXlsx(TableDataLoader):
             headerRowIdx (int): Index of the header row in the spreadsheet.
             dataPath (str): Path to the Excel file.
         """
-        super().__init__(headerRowIdx, dataPath, **kwargs)
+        super().__init__(headerRowIdx, f"{dataPath}.xlsx", **kwargs)
 
     def load(self):
         """Load data from an Excel file and populate `self._transactions`.
@@ -224,7 +224,7 @@ class DataLoaderCsv(TableDataLoader):
             dataPath (str): Path to the CSV file.
         """
         self._separator = separator
-        super().__init__(headerRowIdx, dataPath, **kwargs)
+        super().__init__(headerRowIdx, f"{dataPath}.csv", **kwargs)
 
     def load(self):
         """Load data from a CSV file and populate `self._transactions`.

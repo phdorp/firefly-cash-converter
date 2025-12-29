@@ -28,6 +28,7 @@ def defineTransferParser(subparsers: _SubParsersAction):
         "source",
         type=str,
         choices=["barclays", "paypal", "trade_republic", "common"],
+        help="Source of the input data.",
     )
     parser.add_argument(
         "--interface_config",
@@ -41,7 +42,7 @@ def defineTransferParser(subparsers: _SubParsersAction):
     parser.add_argument(
         "--input_directory",
         type=str,
-        help="Path to the input file to be converted.",
+        help="Path to the directory containing input files to be converted.",
         default="tmp",
     )
     parser.add_argument(
@@ -49,7 +50,6 @@ def defineTransferParser(subparsers: _SubParsersAction):
         type=str,
         help="Name of the input file to be converted.",
         default=None,
-        required=False,
     )
 
 
@@ -61,7 +61,7 @@ def defineConvertParser(subparsers: _SubParsersAction):
             convert parser is added.
     """
     parser: ArgumentParser = subparsers.add_parser(
-        CommandType.CONVERT.value, help="Convert transaction data to Firefly III transactions"
+        CommandType.CONVERT.value, help="Convert transaction data to Firefly III transactions (common)"
     )
     parser.add_argument(
         "source", type=str, choices=["barclays", "paypal", "trade_republic"], help="Source of the input data."
@@ -115,7 +115,7 @@ def transfer(arguments: Namespace):
     """
     inputName = arguments.source if arguments.input_name is None else arguments.input_name
     accountName = arguments.source if arguments.account_name is None else arguments.account_name
-    inputFile = f"{arguments.input_directory}/{inputName}.csv"
+    inputFile = f"{arguments.input_directory}/{inputName}"
 
     loader = ldb.loaderMapping[arguments.source](inputFile, accountName=accountName)
     transactions = loader.load()
