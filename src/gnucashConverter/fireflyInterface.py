@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import ast
 import enum
-from typing import Dict, List, Optional, overload
+from typing import Dict, List, Optional
 
 import requests
 
@@ -178,15 +178,23 @@ class FireflyInterface:
         resp.raise_for_status()
         return resp
 
-    @overload
-    def deleteAccounts(self) -> None:
-        pass
-
-    @overload
-    def deleteAccounts(self, account_ids: List[str]) -> None:
-        pass
-
     def deleteAccounts(self, account_ids: Optional[List[str]] = None) -> None:
+        """Delete one or more accounts from the Firefly III server.
+
+        If no account IDs are provided, fetches all accounts from the server and deletes them.
+        Otherwise, deletes only the specified accounts.
+
+        Args:
+            account_ids (Optional[List[str]]): List of Firefly account IDs to delete.
+                If None, all accounts on the server will be fetched and deleted.
+                Defaults to None.
+
+        Returns:
+            None
+
+        Raises:
+            requests.HTTPError: If any deletion request fails.
+        """
         if account_ids is None:
             accounts = self.getAccounts()
             account_ids = [account.id for account in accounts]
