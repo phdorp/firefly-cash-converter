@@ -21,4 +21,4 @@ sudo docker compose up
 ```
 
 Register an account at `http://localhost:80` and create a personal access token.
-Store the token in the environment variable `API_TOKEN`, e.g., by copying the token string to a `.env` file.
+Store the token in the environment variable `API_TOKEN`, e.g., by copying the token string to a `.env` file in the repository root.
