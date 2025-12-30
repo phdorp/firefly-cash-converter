@@ -1,0 +1,6 @@
+[firefly_interface]
+# paste your firefly base url here
+base_url = "http://your-firefly-instance"
+# paste your firefly api token here
+api_token = "your-api-token-here"
+duplicate_transaction = "ignore"  # options: "error", "ignore"
