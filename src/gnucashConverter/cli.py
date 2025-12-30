@@ -95,7 +95,7 @@ def defineConvertParser(subparsers: _SubParsersAction):
     parser.add_argument(
         "--filter_query",
         type=str,
-        help="Optional data query to filter transactions before transfer.",
+        help="Optional data query to filter transactions before conversion.",
         default=None,
     )
 
