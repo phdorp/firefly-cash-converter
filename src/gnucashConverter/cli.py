@@ -31,9 +31,9 @@ def defineTransferParser(subparsers: _SubParsersAction):
         help="Source of the input data.",
     )
     parser.add_argument(
-        "--interface_config",
+        "--config_path",
         type=str,
-        default="./config/fireflyInterface.toml",
+        default="./config.toml",
         help="Path to the interface configuration file.",
     )
     parser.add_argument(
@@ -136,8 +136,8 @@ def transfer(arguments: Namespace):
     loader = ldb.loaderMapping[arguments.source](inputFile, accountName=accountName)
     transactions = loader.load()
 
-    interfaceConfig = toml.load(arguments.interface_config)
-    interface = ffi.FireflyInterface(**interfaceConfig)
+    config = toml.load(arguments.config_path)
+    interface = ffi.FireflyInterface(**config["firefly_interface"])
 
     if arguments.filter_query:
         transactions = cdt.ConvertData(transactions).filterByQuery(arguments.filter_query).transactions
