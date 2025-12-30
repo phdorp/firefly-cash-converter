@@ -1,7 +1,9 @@
-from typing import List, Dict, Optional
+import re
+import tomllib
+from pathlib import Path
+from typing import Dict, List, Optional
 
 import pandas as pd
-import re
 
 from gnucashConverter import data
 
@@ -27,7 +29,33 @@ class ConvertData:
         """
         return self._transactions
 
-    def __init__(self, data: List[data.BaseTransaction], accountMap: Optional[Dict[str, str]] = None):
+    @property
+    def queries(self) -> Dict[str, str]:
+        """Return the currently-loaded query definitions.
+
+        Returns:
+            Dict[str, str]: Currently-loaded query definitions.
+        """
+        return self._queries
+
+    @queries.setter
+    def queries(self, queries: Dict[str, str] | str) -> None:
+        """Set the query definitions.
+
+        Args:
+            queries (Dict[str, str] | str): Query definitions to set.
+        """
+        if isinstance(queries, str):
+            self._queries = self._loadQueryConfig(queries)
+        else:
+            self._queries = queries
+
+    def __init__(
+        self,
+        data: List[data.BaseTransaction],
+        accountMap: Optional[Dict[str, str]] = None,
+        queries: Optional[Dict[str, str] | str] = None,
+    ):
         """Initialize the converter with transaction data and optional account mapping.
 
         Args:
@@ -37,8 +65,9 @@ class ConvertData:
                 Defaults to None (empty mapping).
         """
         self._transactions = data
-        self._unmappedAccountName = "Imbalance-EUR"
+        self._unmappedAccountName = ""
         self._accountMap = accountMap if accountMap is not None else {}
+        self.queries = queries if queries is not None else {}
 
     def _findAccountName(self, description: str) -> str:
         """Find the account name for a transaction based on its description.
@@ -103,3 +132,109 @@ class ConvertData:
         """
         separator = ","
         self._convert().to_csv(filePath, sep=separator, index=False)
+
+    def filterByQuery(self, query: str) -> "ConvertData":
+        """Filter transactions using a pandas query expression.
+
+        The query string uses pandas query syntax. Common examples:
+        - "amount > 100"
+        - "type == 'withdrawal'"
+        - "amount > 100 and type == 'withdrawal'"
+        - "reconciled == True"
+        - "date >= '2025-01-01' and date <= '2025-12-31'"
+
+        Args:
+            query (str): A pandas-compatible query expression.
+
+        Returns:
+            ConvertData: New ConvertData instance with filtered transactions.
+
+        Raises:
+            ValueError: If the query is invalid or fails to execute.
+        """
+        try:
+            dataframe = self._convert()
+            filtered_dataframe = dataframe.query(query)
+            transactions = [data.BaseTransaction(**row.to_dict()) for _, row in filtered_dataframe.iterrows()]
+            return ConvertData(transactions, self._accountMap, self._queries)
+        except Exception as e:
+            raise ValueError(f"Failed to execute query '{query}': {e}")
+
+    def filterByNamedQuery(self, queryName: str) -> "ConvertData":
+        """Apply a named query from the loaded configuration.
+
+        Args:
+            queryName (str): Name of the query as defined in the TOML configuration.
+
+        Returns:
+            ConvertData: New ConvertData instance with filtered transactions.
+
+        Raises:
+            ValueError: If the query name does not exist or execution fails.
+        """
+        if not self._queries:
+            raise ValueError("No queries loaded. Call loadQueryConfig() first.")
+
+        if queryName not in self._queries:
+            raise ValueError(f"Query '{queryName}' not found. Available queries: {', '.join(self._queries.keys())}")
+
+        return self.filterByQuery(self._queries[queryName])
+
+    def filterByNamedQueries(self, *queryNames: str, logic: str = "and") -> "ConvertData":
+        """Apply multiple named queries combined with AND or OR logic.
+
+        Args:
+            *queryNames: Names of queries to apply.
+            logic (str): "and" or "or" - how to combine query results. Defaults to "and".
+
+        Returns:
+            ConvertData: New ConvertData instance with filtered transactions.
+
+        Raises:
+            ValueError: If any query name doesn't exist or logic is invalid.
+        """
+        if logic not in ("and", "or"):
+            raise ValueError("logic must be 'and' or 'or'")
+
+        if not self._queries:
+            raise ValueError("No queries loaded. Call loadQueryConfig() first.")
+
+        queries = []
+        for queryName in queryNames:
+            if queryName not in self._queries:
+                raise ValueError(f"Query '{queryName}' not found. Available queries: {', '.join(self._queries.keys())}")
+            queries.append(self._queries[queryName])
+
+        combined_query = f" {logic} ".join(f"({q})" for q in queries)
+        return self.filterByQuery(combined_query)
+
+    def listQueries(self) -> List[str]:
+        """List all available named queries from the loaded configuration.
+
+        Returns:
+            List[str]: List of query names.
+        """
+        return list(self._queries.keys())
+
+    @staticmethod
+    def _loadQueryConfig(configPath: str) -> Dict[str, str]:
+        """Load pandas query definitions from a TOML file.
+
+        Args:
+            configPath (str): Path to the TOML configuration file.
+
+        Raises:
+            FileNotFoundError: If the configuration file does not exist.
+            ValueError: If the TOML file does not contain a [queries] section.
+        """
+        config_file = Path(configPath)
+        if not config_file.exists():
+            raise FileNotFoundError(f"Query configuration file not found: {configPath}")
+
+        with open(config_file, "rb") as f:
+            config = tomllib.load(f)
+
+        if "queries" not in config:
+            raise ValueError(f"Configuration file {configPath} must contain a [queries] section")
+
+        return config["queries"]
