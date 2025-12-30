@@ -31,10 +31,10 @@ def defineTransferParser(subparsers: _SubParsersAction):
         help="Source of the input data.",
     )
     parser.add_argument(
-        "--interface_config",
+        "--config_path",
         type=str,
-        default="./config/fireflyInterface.toml",
-        help="Path to the interface configuration file.",
+        default="./config.toml",
+        help="Path to the CLI configuration file.",
     )
     parser.add_argument(
         "--account_name", type=str, help="Name of the account to assign to loaded transactions.", default=None
@@ -136,8 +136,10 @@ def transfer(arguments: Namespace):
     loader = ldb.loaderMapping[arguments.source](inputFile, accountName=accountName)
     transactions = loader.load()
 
-    interfaceConfig = toml.load(arguments.interface_config)
-    interface = ffi.FireflyInterface(**interfaceConfig)
+    config = toml.load(arguments.config_path)
+    if "firefly_interface" not in config:
+        raise ValueError("Configuration file must contain a [firefly_interface] section")
+    interface = ffi.FireflyInterface(**config["firefly_interface"])
 
     if arguments.filter_query:
         transactions = cdt.ConvertData(transactions).filterByQuery(arguments.filter_query).transactions
