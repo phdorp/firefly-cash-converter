@@ -6,4 +6,7 @@
 *.egg-info
 
 # temporary files
-.tmp
+tmp
+
+# environment variables
+.env

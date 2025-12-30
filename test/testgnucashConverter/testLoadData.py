@@ -64,24 +64,28 @@ class TestLoaderTr(unittest.TestCase):
         self.assertEqual(transactions[0].amount, 10000.0)
         self.assertEqual(transactions[0].description, "asdf - Deposit")
         self.assertEqual(transactions[0].destination_name, "tr")
+        self.assertIs(transactions[0].source_name, None)
         self.assertEqual(transactions[0].type, data.TransactionType.DEPOSIT.value)
 
         self.assertEqual(transactions[1].date, "2025-07-01T05:22:12")
         self.assertEqual(transactions[1].amount, 48.24)
         self.assertEqual(transactions[1].description, "ijkl - Interest")
         self.assertEqual(transactions[1].destination_name, "tr")
+        self.assertIs(transactions[1].source_name, None)
         self.assertEqual(transactions[1].type, data.TransactionType.DEPOSIT.value)
 
         self.assertEqual(transactions[2].date, "2025-07-02T00:41:26")
         self.assertEqual(transactions[2].amount, 128.74)
         self.assertEqual(transactions[2].description, "korrekt - Tax Refund")
         self.assertEqual(transactions[2].destination_name, "tr")
+        self.assertIs(transactions[2].source_name, None)
         self.assertEqual(transactions[2].type, data.TransactionType.DEPOSIT.value)
 
         self.assertEqual(transactions[3].date, "2025-08-01T12:14:31")
         self.assertEqual(transactions[3].amount, 115.0)
         self.assertEqual(transactions[3].description, "money - Removal")
         self.assertEqual(transactions[3].source_name, "tr")
+        self.assertIs(transactions[3].destination_name, None)
         self.assertEqual(transactions[3].type, data.TransactionType.WITHDRAWAL.value)
 
 

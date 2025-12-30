@@ -98,6 +98,123 @@ class BaseTransaction:
 
 
 @dc.dataclass
+class GetTransaction(BaseTransaction):
+    """Transaction data class for retrieving transaction information from Firefly III.
+
+    Extends BaseTransaction with additional fields returned from the API including
+    transaction metadata, user information, and related entity details.
+
+    Attributes:
+        transaction_id (int): Transaction identifier. Defaults to 0.
+        transaction_journal_id (str | None): ID of the underlying transaction journal. Defaults to None.
+        user (str | None): User ID who created the transaction. Defaults to None.
+        created_at (str | None): Transaction creation timestamp. Defaults to None.
+        updated_at (str | None): Last update timestamp. Defaults to None.
+        currency_name (str | None): Transaction currency name. Defaults to None.
+        currency_symbol (str | None): Transaction currency symbol. Defaults to None.
+        currency_decimal_places (int | None): Currency decimal places. Defaults to None.
+        foreign_currency_name (str | None): Foreign currency name. Defaults to None.
+        foreign_currency_symbol (str | None): Foreign currency symbol. Defaults to None.
+        foreign_currency_decimal_places (int | None): Foreign currency decimal places. Defaults to None.
+        primary_currency_id (int | None): Primary currency ID. Defaults to None.
+        primary_currency_code (str | None): Primary currency code. Defaults to None.
+        primary_currency_name (str | None): Primary currency name. Defaults to None.
+        primary_currency_symbol (str | None): Primary currency symbol. Defaults to None.
+        primary_currency_decimal_places (int | None): Primary currency decimal places. Defaults to None.
+        source_iban (str | None): Source account IBAN. Defaults to None.
+        source_type (str | None): Source account type. Defaults to None.
+        destination_iban (str | None): Destination account IBAN. Defaults to None.
+        destination_type (str | None): Destination account type. Defaults to None.
+        latitude (float | None): Transaction location latitude. Defaults to None.
+        longitude (float | None): Transaction location longitude. Defaults to None.
+        zoom_level (int | None): Transaction location zoom level. Defaults to None.
+        has_attachments (bool | None): Whether transaction has attachments. Defaults to None.
+        import_hash_v2 (str | None): Hash value of original import transaction. Defaults to None.
+        recurrence_id (str | None): Associated recurring transaction ID. Defaults to None.
+        recurrence_total (int | None): Total number of recurrences. Defaults to None.
+        recurrence_count (int | None): Current recurrence count. Defaults to None.
+        object_has_currency_setting (bool | None): Whether object has currency setting. Defaults to None.
+        pc_amount (str | None): Primary currency amount. Defaults to None.
+        pc_foreign_amount (str | None): Primary currency foreign amount. Defaults to None.
+        source_balance_after (str | None): Source account balance after transaction. Defaults to None.
+        source_balance_dirty (str | None): Source account balance dirty flag. Defaults to None.
+        pc_source_balance_after (str | None): Primary currency source balance after transaction. Defaults to None.
+        destination_balance_after (str | None): Destination account balance after transaction. Defaults to None.
+        destination_balance_dirty (str | None): Destination account balance dirty flag. Defaults to None.
+        pc_destination_balance_after (str | None): Primary currency destination balance after transaction. Defaults to None.
+        subscription_id (str | None): Associated subscription ID. Defaults to None.
+        subscription_name (str | None): Associated subscription name. Defaults to None.
+        original_source (str | None): Original source of transaction. Defaults to None.
+    """
+
+    transaction_id: int = 0
+    transaction_journal_id: str | None = None
+    user: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+    currency_name: str | None = None
+    currency_symbol: str | None = None
+    currency_decimal_places: int | None = None
+    foreign_currency_name: str | None = None
+    foreign_currency_symbol: str | None = None
+    foreign_currency_decimal_places: int | None = None
+    primary_currency_id: int | None = None
+    primary_currency_code: str | None = None
+    primary_currency_name: str | None = None
+    primary_currency_symbol: str | None = None
+    primary_currency_decimal_places: int | None = None
+    source_iban: str | None = None
+    source_type: str | None = None
+    destination_iban: str | None = None
+    destination_type: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    zoom_level: int | None = None
+    has_attachments: bool | None = None
+    import_hash_v2: str | None = None
+    recurrence_id: str | None = None
+    recurrence_total: int | None = None
+    recurrence_count: int | None = None
+    object_has_currency_setting: bool | None = None
+    # Primary-currency converted amounts and balances
+    pc_amount: str | None = None
+    pc_foreign_amount: str | None = None
+    source_balance_after: str | None = None
+    source_balance_dirty: str | None = None
+    pc_source_balance_after: str | None = None
+    destination_balance_after: str | None = None
+    destination_balance_dirty: str | None = None
+    pc_destination_balance_after: str | None = None
+    # Optional linkage and provenance
+    subscription_id: str | None = None
+    subscription_name: str | None = None
+    original_source: str | None = None
+    piggy_bank_id: int | None = None
+    piggy_bank_name: str | None = None
+    bill_id: int | None = None
+    bill_name: str | None = None
+    tags: str | None = None
+    notes: str | None = None
+    internal_reference: str | None = None
+    external_id: str | None = None
+    external_url: str | None = None
+    sepa_cc: str | None = None
+    sepa_ct_op: str | None = None
+    sepa_ct_id: str | None = None
+    sepa_db: str | None = None
+    sepa_country: str | None = None
+    sepa_ep: str | None = None
+    sepa_ci: str | None = None
+    sepa_batch_id: str | None = None
+    interest_date: str | None = None
+    book_date: str | None = None
+    process_date: str | None = None
+    due_date: str | None = None
+    payment_date: str | None = None
+    invoice_date: str | None = None
+
+
+@dc.dataclass
 class PostTransaction(BaseTransaction):
     """Transaction data class for posting transactions to Firefly III.
 
