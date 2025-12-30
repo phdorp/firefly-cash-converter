@@ -176,7 +176,7 @@ class ConvertData:
             ValueError: If the query name does not exist or execution fails.
         """
         if not self._queries:
-            raise ValueError("No queries loaded. Call loadQueryConfig() first.")
+            raise ValueError("No queries loaded.")
 
         if queryName not in self._queries:
             raise ValueError(f"Query '{queryName}' not found. Available queries: {', '.join(self._queries.keys())}")
@@ -200,7 +200,7 @@ class ConvertData:
             raise ValueError("logic must be 'and' or 'or'")
 
         if not self._queries:
-            raise ValueError("No queries loaded. Call loadQueryConfig() first.")
+            raise ValueError("No queries loaded.")
 
         queries = []
         for queryName in queryNames:
@@ -233,7 +233,7 @@ class ConvertData:
                 is missing, or an operator is invalid.
         """
         if not self._queries:
-            raise ValueError("No queries loaded. Call loadQueryConfig() first.")
+            raise ValueError("No queries loaded.")
 
         if not parts:
             raise ValueError("Expression parts must not be empty.")
