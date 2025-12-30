@@ -1,4 +1,4 @@
-# Firefly Cash
+# Firefly Cash Converter
 
 ## Usage
 
