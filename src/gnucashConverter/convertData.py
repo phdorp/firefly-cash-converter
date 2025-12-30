@@ -63,6 +63,9 @@ class ConvertData:
             accountMap (Optional[Dict[str, str]]): Mapping of account names to description patterns.
                 Keys are account names, values are regex patterns to match in transaction descriptions.
                 Defaults to None (empty mapping).
+            queries (Optional[Dict[str, str] | str]): Query definitions for filtering transactions.
+                Can be a dictionary of query definitions or a path to a TOML config file.
+                Defaults to None (empty queries).
         """
         self._transactions = data
         self._unmappedAccountName = ""
