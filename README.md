@@ -4,6 +4,14 @@ A Python tool for converting financial transaction data from various sources (Ba
 
 ## Installation
 
+Install directly from the GitHub repository:
+
+```bash
+pip install git+https://github.com/phdorp/gnucash-convert.git@main
+```
+
+This will install the `cash` command-line tool for converting and transferring financial transactions.
+
 ## Usage
 
 ### Pytr
