@@ -4,7 +4,7 @@ A Python tool for converting financial transaction data from various sources (Ba
 
 ## Prerequisites
 
-- Python >= 3.13
+- Python >= 3.11
 - A running Firefly III instance (for the `transfer` command)
 
 ## Installation
