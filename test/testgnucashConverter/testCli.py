@@ -40,7 +40,7 @@ class TestTransferCli(unittest.TestCase):
         """Test the transfer CLI command with transactions from common.csv."""
         # Prepare test data paths
         test_dir = os.path.dirname(__file__)
-        test_data_dir = os.path.join(test_dir, "..", "data")
+        test_data_dir = os.path.normpath(os.path.join(test_dir, "..", "data"))
 
         # Create the 'tr' account that's referenced in common.csv
         account = data.PostAssetAccount(name="tr")
@@ -66,10 +66,8 @@ class TestTransferCli(unittest.TestCase):
         cli.transfer(args)
 
         # Verify transactions were transferred successfully
-        server_transactions = self._fireflyInterface.getTransactions()
-        self.assertGreaterEqual(
-            len(server_transactions), 5, "Expected at least 5 transactions to be created on the server"
-        )
+        server_transactions = self._fireflyInterface.getTransactions(limit=100, page=1)
+        self.assertEqual(len(server_transactions), 5, "Expected at least 5 transactions to be created on the server")
 
         # Verify transaction details from common.csv
         transaction_descriptions = [transaction.description for transaction in server_transactions]
