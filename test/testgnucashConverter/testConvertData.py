@@ -1,7 +1,7 @@
 import unittest
 
-from gnucashConverter import convertData as cvd
-from gnucashConverter import loadData as ldb
+from fireflyConverter import convertData as cvd
+from fireflyConverter import loadData as ldb
 
 
 class TestConvertData(unittest.TestCase):

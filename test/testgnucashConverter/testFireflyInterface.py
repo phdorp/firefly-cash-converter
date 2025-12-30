@@ -2,9 +2,9 @@ import os
 import unittest
 from typing import Set
 
-from gnucashConverter import data
-from gnucashConverter import fireflyInterface as ffi
-from gnucashConverter import loadData as ldb
+from fireflyConverter import data
+from fireflyConverter import fireflyInterface as ffi
+from fireflyConverter import loadData as ldb
 
 
 class TestInterfaceBase(unittest.TestCase):

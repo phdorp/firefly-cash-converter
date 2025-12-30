@@ -1,5 +1,5 @@
 [project]
-name = "gnucashConvert"
+name = "firefly-cash-converter"
 version = "1.0.0"
 requires-python = ">=3.13"
 dependencies = [
@@ -19,8 +19,8 @@ where = ["src"]
 
 [tool.uv.workspace]
 members = [
-    "gnucash-convert",
+    "firefly-converter",
 ]
 
 [project.scripts]
-cash = "gnucashConverter.__main__:main"
+cash = "fireflyConverter.__main__:main"
