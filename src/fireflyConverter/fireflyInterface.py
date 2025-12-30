@@ -115,7 +115,7 @@ class FireflyInterface:
             errorMessage: str = ast.literal_eval(resp.text).get("message")
             isDuplicate = "duplicate" in errorMessage.lower()
             if isDuplicate and self._duplicate_transaction == DuplicateTransactionHandle.IGNORE:
-                logger.info(f"Duplicate transaction detected, ignoring: {transaction}")
+                logger.debug("Duplicate transaction detected.")
                 return resp
             else:
                 logger.error(f"Error creating transaction: {errorMessage}")

@@ -4,6 +4,9 @@ from argparse import ArgumentParser, Namespace
 
 from fireflyConverter import cli
 
+# Configure logging for the package
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+
 
 def main():
     """Parse CLI arguments and dispatch the selected subcommand.
