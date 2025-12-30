@@ -34,7 +34,7 @@ def defineTransferParser(subparsers: _SubParsersAction):
         "--config_path",
         type=str,
         default="./config.toml",
-        help="Path to the interface configuration file.",
+        help="Path to the CLI configuration file.",
     )
     parser.add_argument(
         "--account_name", type=str, help="Name of the account to assign to loaded transactions.", default=None
