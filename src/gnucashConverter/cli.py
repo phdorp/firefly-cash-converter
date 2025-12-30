@@ -137,6 +137,8 @@ def transfer(arguments: Namespace):
     transactions = loader.load()
 
     config = toml.load(arguments.config_path)
+    if "firefly_interface" not in config:
+        raise ValueError("Configuration file must contain a [firefly_interface] section")
     interface = ffi.FireflyInterface(**config["firefly_interface"])
 
     if arguments.filter_query:
