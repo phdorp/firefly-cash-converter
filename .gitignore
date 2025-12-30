@@ -13,3 +13,6 @@ tmp
 
 # ignore only the config file at root
 /config.toml
+
+# vscode config
+.vscode
