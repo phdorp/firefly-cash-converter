@@ -1,0 +1,34 @@
+# Test Query Configuration
+# Predefined queries for testing filterByQuery functionality
+
+[queries]
+# Basic type filters
+deposits_only = "type == 'deposit'"
+withdrawals_only = "type == 'withdrawal'"
+
+# Amount-based filters
+large_transactions = "amount > 100"
+small_transactions = "amount < 100"
+medium_transactions = "amount >= 48.24 and amount <= 128.74"
+
+# Reconciliation filters
+reconciled = "reconciled == True"
+unreconciled = "reconciled == False"
+
+# Description pattern filters
+contains_interest = "description.str.contains('Interest', case=False, na=False)"
+contains_tax = "description.str.contains('Tax', case=False, na=False)"
+contains_money = "description.str.contains('money', case=False, na=False)"
+
+# Date-based filters
+specific_date = "date.str.startswith('2025-12-30')"
+date_range = "date >= '2025-01-01' and date <= '2025-12-31'"
+
+# Combined filters
+large_deposits = "type == 'deposit' and amount > 100"
+small_withdrawals = "type == 'withdrawal' and amount < 50"
+reconciled_large = "reconciled == True and amount > 100"
+
+# Complex filters
+high_value_reconciled = "amount > 200 and reconciled == True"
+deposits_with_interest = "type == 'deposit' and description.str.contains('Interest', case=False, na=False)"

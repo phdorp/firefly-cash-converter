@@ -177,7 +177,12 @@ class TableDataLoader(DataLoader):
         # Get column indices of the target fields
         colIdcs: List[int] = []
         for fieldAlias in self._fieldAliases:
-            colIdcs.append(np.where(dataFrame.values[self._headerRowIdx, :] == fieldAlias)[0][0])
+            fields = np.where(dataFrame.values[self._headerRowIdx, :] == fieldAlias)[0]
+
+            if len(fields) == 0:
+                raise ValueError(f"Could not find required field '{fieldAlias}' in data")
+            else:
+                colIdcs.append(fields[0])
 
         return self._getTransactions(dataFrame, colIdcs)
 
@@ -340,7 +345,7 @@ class DataLoaderBarclays(DataLoaderXlsx, DataLoaderUncommon):
 
         self._fieldAliases = {
             "Beschreibung": Fields.description,
-            "Händlerdetails": Fields.description,
+            "Details": Fields.description,
             "Buchungsdatum": Fields.date,
             "Originalbetrag": Fields.amount,
         }

@@ -51,6 +51,12 @@ def defineTransferParser(subparsers: _SubParsersAction):
         help="Name of the input file to be converted.",
         default=None,
     )
+    parser.add_argument(
+        "--filter_query",
+        type=str,
+        help="Optional data query to filter transactions before transfer.",
+        default=None,
+    )
 
 
 def defineConvertParser(subparsers: _SubParsersAction):
@@ -86,6 +92,12 @@ def defineConvertParser(subparsers: _SubParsersAction):
     parser.add_argument(
         "--account_name", type=str, help="Name of the account to assign to loaded transactions.", default=None
     )
+    parser.add_argument(
+        "--filter_query",
+        type=str,
+        help="Optional data query to filter transactions before conversion.",
+        default=None,
+    )
 
 
 PARSER_DEFINITIONS: List[Callable[[_SubParsersAction], None]] = [
@@ -104,6 +116,10 @@ def convert(arguments: Namespace):
     transactions = loader.load()
 
     converter = cdt.ConvertData(transactions)
+
+    if arguments.filter_query:
+        converter = converter.filterByQuery(arguments.filter_query)
+
     converter.saveCsv(filePath=f"{arguments.output}/{arguments.file_name}.csv")
 
 
@@ -122,6 +138,9 @@ def transfer(arguments: Namespace):
 
     interfaceConfig = toml.load(arguments.interface_config)
     interface = ffi.FireflyInterface(**interfaceConfig)
+
+    if arguments.filter_query:
+        transactions = cdt.ConvertData(transactions).filterByQuery(arguments.filter_query).transactions
 
     for transaction in transactions:
         response = interface.createTransaction(transaction)
