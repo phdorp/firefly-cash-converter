@@ -6,8 +6,8 @@ from typing import Dict, List, Optional
 
 import requests
 
-from gnucashConverter import data
-from gnucashConverter.fireflyPayload import PayloadFactory
+from fireflyConverter import data
+from fireflyConverter.fireflyPayload import PayloadFactory
 
 
 class DuplicateTransactionHandle(enum.Enum):

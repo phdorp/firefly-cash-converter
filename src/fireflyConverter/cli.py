@@ -4,9 +4,9 @@ from typing import Callable, Dict, List
 
 import toml
 
-from gnucashConverter import convertData as cdt
-from gnucashConverter import fireflyInterface as ffi
-from gnucashConverter import loadData as ldb
+from fireflyConverter import convertData as cdt
+from fireflyConverter import fireflyInterface as ffi
+from fireflyConverter import loadData as ldb
 
 
 class CommandType(enum.Enum):

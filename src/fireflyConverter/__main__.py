@@ -2,7 +2,7 @@ import logging
 import sys
 from argparse import ArgumentParser, Namespace
 
-from gnucashConverter import cli
+from fireflyConverter import cli
 
 
 def main():

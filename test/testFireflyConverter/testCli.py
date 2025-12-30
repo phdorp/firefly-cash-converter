@@ -3,8 +3,8 @@ import tempfile
 import unittest
 from argparse import ArgumentParser
 
-from gnucashConverter import cli, data
-from gnucashConverter import fireflyInterface as ffi
+from fireflyConverter import cli, data
+from fireflyConverter import fireflyInterface as ffi
 
 
 class TestTransferCli(unittest.TestCase):

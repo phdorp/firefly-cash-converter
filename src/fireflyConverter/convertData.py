@@ -5,7 +5,7 @@ from typing import Dict, List, Optional
 
 import pandas as pd
 
-from gnucashConverter import data
+from fireflyConverter import data
 
 
 class ConvertData:
