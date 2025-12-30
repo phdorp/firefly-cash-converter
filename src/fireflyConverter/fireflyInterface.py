@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import ast
 import enum
+import logging
 from typing import Dict, List, Optional
 
 import requests
 
 from fireflyConverter import data
 from fireflyConverter.fireflyPayload import PayloadFactory
+
+logger = logging.getLogger(__name__)
 
 
 class DuplicateTransactionHandle(enum.Enum):
@@ -103,6 +106,7 @@ class FireflyInterface:
             Exception: If the API returns an error and duplicate handling is not set to IGNORE.
             requests.HTTPError: If the HTTP request fails with a non-422 status code.
         """
+        logger.debug(f"Creating transaction: {transaction.description} (amount: {transaction.amount})")
         payload = self._payloadFactory.toPayload(transaction)
         url = f"{self._api_url}/transactions"
         resp = self._session.post(url, json=payload)
@@ -111,9 +115,10 @@ class FireflyInterface:
             errorMessage: str = ast.literal_eval(resp.text).get("message")
             isDuplicate = "duplicate" in errorMessage.lower()
             if isDuplicate and self._duplicate_transaction == DuplicateTransactionHandle.IGNORE:
-                print(f"Duplicate transaction detected, ignoring: {transaction}")
+                logger.debug("Duplicate transaction detected.")
                 return resp
             else:
+                logger.error(f"Error creating transaction: {errorMessage}")
                 raise Exception(f"Error creating transaction: {errorMessage}")
 
         resp.raise_for_status()
@@ -131,6 +136,7 @@ class FireflyInterface:
         Raises:
             requests.HTTPError: If the HTTP request fails.
         """
+        logger.info("Retrieving accounts from Firefly III")
         url = f"{self._api_url}/accounts"
         response = self._session.get(url)
         response.raise_for_status()
@@ -141,6 +147,7 @@ class FireflyInterface:
             accountData = response.get("attributes", {})
             accountData["id"] = response.get("id")
             accounts.append(data.GetAccount(**accountData))
+        logger.info(f"Retrieved {len(accounts)} accounts from Firefly III")
         return accounts
 
     def createAccount(self, account: data.PostAccount) -> requests.Response:
@@ -155,10 +162,12 @@ class FireflyInterface:
         Raises:
             requests.HTTPError: If the HTTP request fails.
         """
+        logger.info(f"Creating account: {account.name}")
         url = f"{self._api_url}/accounts"
         payload = self._payloadFactory.toPayload(account)
         resp = self._session.post(url, json=payload)
         resp.raise_for_status()
+        logger.debug(f"Account {account.name} created successfully (status: {resp.status_code})")
         return resp
 
     def deleteAccount(self, account_id: str) -> requests.Response:
@@ -173,9 +182,11 @@ class FireflyInterface:
         Raises:
             requests.HTTPError: If the HTTP request fails.
         """
+        logger.info(f"Deleting account: {account_id}")
         url = f"{self._api_url}/accounts/{account_id}"
         resp = self._session.delete(url)
         resp.raise_for_status()
+        logger.debug(f"Account {account_id} deleted successfully")
         return resp
 
     def deleteAccounts(self, account_ids: Optional[List[str]] = None) -> None:
@@ -196,11 +207,14 @@ class FireflyInterface:
             requests.HTTPError: If any deletion request fails.
         """
         if account_ids is None:
+            logger.info("No account IDs provided, fetching all accounts for deletion")
             accounts = self.getAccounts()
             account_ids = [account.id for account in accounts]
 
+        logger.info(f"Deleting {len(account_ids)} accounts from Firefly III")
         for account_id in account_ids:
             self.deleteAccount(account_id)
+        logger.info(f"Successfully deleted all {len(account_ids)} accounts")
 
     def deleteTransaction(self, transaction_id: str) -> requests.Response:
         """Delete a transaction on the Firefly III server.
