@@ -1,7 +1,7 @@
 import unittest
 
-from gnucashConverter import data
-from gnucashConverter import loadData as ldb
+from fireflyConverter import data
+from fireflyConverter import loadData as ldb
 
 
 class TestLoaderBarclays(unittest.TestCase):

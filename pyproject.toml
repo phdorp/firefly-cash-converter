@@ -1,12 +1,11 @@
 [project]
-name = "gnucashConvert"
-version = "1.0.0"
+name = "firefly-cash-converter"
+version = "0.0.0"
 requires-python = ">=3.13"
 dependencies = [
     "pandas",
     "numpy",
     "openpyxl",
-    "pytr",
     "toml",
 ]
 
@@ -19,8 +18,8 @@ where = ["src"]
 
 [tool.uv.workspace]
 members = [
-    "gnucash-convert",
+    "firefly-converter",
 ]
 
 [project.scripts]
-cash = "gnucashConverter.__main__:main"
+cash = "fireflyConverter.__main__:main"

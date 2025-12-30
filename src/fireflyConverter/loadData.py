@@ -7,7 +7,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, get_args
 import numpy as np
 import pandas as pd
 
-from gnucashConverter import data
+from fireflyConverter import data
 
 
 class Fields(enum.IntEnum):

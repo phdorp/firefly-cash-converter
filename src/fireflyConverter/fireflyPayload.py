@@ -1,6 +1,6 @@
 from typing import Any, Optional, Union, overload
 
-from gnucashConverter.data import BaseTransaction, PostAccount
+from fireflyConverter.data import BaseTransaction, PostAccount
 
 
 class PayloadFactory:
