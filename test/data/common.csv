@@ -1,5 +1,6 @@
 date,amount,description,order,reconciled,type,source_name,destination_name,currency_id,currency_code,foreign_amount,foreign_currency_id,foreign_currency_code,budget_id,budget_name,category_id,category_name,source_id,destination_id,piggy_bank_id,piggy_bank_name,bill_id,bill_name,tags,notes,internal_reference,external_id,external_url,sepa_cc,sepa_ct_op,sepa_ct_id,sepa_db,sepa_country,sepa_ep,sepa_ci,sepa_batch_id,interest_date,book_date,process_date,due_date,payment_date,invoice_date
-2024-02-06T15:46:07,10000.0,asdf - Deposit,0,True,deposit,,tr,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-2025-07-01T05:22:12,48.24,ijkl - Interest,0,True,deposit,,tr,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-2025-07-02T00:41:26,128.74,korrekt - Tax Refund,0,True,deposit,,tr,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-2025-08-01T12:14:31,115.0,money - Removal,0,True,withdrawal,tr,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+2024-02-06T15:46:07,10000.0,asdf - Deposit,0,True,deposit,,tr
+2025-07-01T05:22:12,48.24,ijkl - Interest,0,True,deposit,,tr
+2025-07-02T00:41:26,128.74,korrekt - Tax Refund,0,True,deposit,,tr
+2025-08-01T12:14:31,115.0,money - Removal,0,True,withdrawal,tr
+2025-12-30T00:00:00,200.0,year-end bonus,0,True,deposit,,tr

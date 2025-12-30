@@ -37,7 +37,7 @@ python3 test/fireflyServer/setupToken.py
 Register an account at `http://localhost:80` and create a personal access token manually in the Profile section. Then store the token:
 
 ```bash
-echo 'API_TOKEN="your-token-here"' > .env
+echo 'TEST_API_TOKEN="your-token-here"' > .env
 ```
 
 The automated scripts use these default credentials:

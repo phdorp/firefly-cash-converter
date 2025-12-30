@@ -9,8 +9,8 @@ from gnucashConverter import loadData as ldb
 
 class TestInterfaceBase(unittest.TestCase):
     def setUp(self):
-        api_token = os.getenv("API_TOKEN")
-        assert api_token is not None, "API_TOKEN environment variable must be set for tests."
+        api_token = os.getenv("TEST_API_TOKEN")
+        assert api_token is not None, "TEST_API_TOKEN environment variable must be set for tests."
 
         self._fireflyInterface = ffi.FireflyInterface(
             base_url="http://localhost",
