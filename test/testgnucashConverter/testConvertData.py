@@ -127,5 +127,53 @@ class TestFilterByNamedQueries(TestConvertData):
         self.assertEqual(transaction.type, "withdrawal")
 
 
+class TestFilterByNamedQueryExpression(TestConvertData):
+    def testDepositsAndLargeExpression(self):
+        expression = ["deposits_only", "and", "large_transactions"]
+        result = self._converter.filterByNamedQueryExpression(expression)
+        self.assertEqual(len(result.transactions), 3)
+        for transaction in result.transactions:
+            self.assertEqual(transaction.type, "deposit")
+            self.assertGreater(transaction.amount, 100)
+
+    def testDepositsOrWithdrawalsExpression(self):
+        expression = ["deposits_only", "or", "withdrawals_only"]
+        result = self._converter.filterByNamedQueryExpression(expression)
+        self.assertEqual(len(result.transactions), 5)
+
+    def testInterestOrTaxExpression(self):
+        expression = ["contains_interest", "or", "contains_tax"]
+        result = self._converter.filterByNamedQueryExpression(expression)
+        self.assertEqual(len(result.transactions), 2)
+        descriptions = {transaction.description for transaction in result.transactions}
+        self.assertTrue(any("Interest" in description for description in descriptions))
+        self.assertTrue(any("Tax" in description for description in descriptions))
+
+    def testReconciledAndSmallExpression(self):
+        expression = ["reconciled", "and", "small_transactions"]
+        result = self._converter.filterByNamedQueryExpression(expression)
+        self.assertEqual(len(result.transactions), 1)
+        transaction = result.transactions[0]
+        self.assertTrue(transaction.reconciled)
+        self.assertLess(transaction.amount, 100)
+
+    def testReconciledAndWithdrawalExpression(self):
+        expression = ["reconciled", "and", "withdrawals_only"]
+        result = self._converter.filterByNamedQueryExpression(expression)
+        self.assertEqual(len(result.transactions), 1)
+        transaction = result.transactions[0]
+        self.assertTrue(transaction.reconciled)
+        self.assertEqual(transaction.type, "withdrawal")
+
+    def testDepositsLargeAndTaxExpression(self):
+        expression = ["deposits_only", "and", "large_transactions", "and", "contains_tax"]
+        result = self._converter.filterByNamedQueryExpression(expression)
+        self.assertEqual(len(result.transactions), 1)
+        transaction = result.transactions[0]
+        self.assertEqual(transaction.type, "deposit")
+        self.assertGreater(transaction.amount, 100)
+        self.assertIn("Tax", transaction.description)
+
+
 if __name__ == "__main__":
     unittest.main()

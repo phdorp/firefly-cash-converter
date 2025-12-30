@@ -208,6 +208,53 @@ class ConvertData:
         combined_query = f" {logic} ".join(f"({q})" for q in queries)
         return self.filterByQuery(combined_query)
 
+    def filterByNamedQueryExpression(self, parts: List[str]) -> "ConvertData":
+        """Apply a sequence of named queries combined by explicit logic operators.
+
+        The list must alternate query names and logic operators (`and` / `or`),
+        starting and ending with a query name.
+
+        Examples:
+            ["large_transactions", "and", "deposits_only"]
+            ["withdrawals_only", "or", "contains_interest"]
+            ["deposits_only", "and", "large_transactions", "or", "contains_tax"]
+
+        Args:
+            parts (List[str]): Alternating query names and operators.
+
+        Returns:
+            ConvertData: New ConvertData instance with filtered transactions.
+
+        Raises:
+            ValueError: If queries are not loaded, the list is malformed, a query name
+                is missing, or an operator is invalid.
+        """
+        if not self._queries:
+            raise ValueError("No queries loaded. Call loadQueryConfig() first.")
+
+        if not parts:
+            raise ValueError("Expression parts must not be empty.")
+
+        if len(parts) % 2 == 0:
+            raise ValueError("Expression must alternate query names and operators, starting with a query name.")
+
+        combined_parts: List[str] = []
+        for idx, token in enumerate(parts):
+            if idx % 2 == 0:
+                # Expect a query name
+                if token not in self._queries:
+                    raise ValueError(f"Query '{token}' not found. Available queries: {', '.join(self._queries.keys())}")
+                combined_parts.append(f"({self._queries[token]})")
+            else:
+                # Expect an operator
+                op = token.lower()
+                if op not in ("and", "or"):
+                    raise ValueError("Only 'and' or 'or' operators are supported.")
+                combined_parts.append(f" {op} ")
+
+        combined_query = "".join(combined_parts)
+        return self.filterByQuery(combined_query)
+
     def listQueries(self) -> List[str]:
         """List all available named queries from the loaded configuration.
 
