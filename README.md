@@ -1,5 +1,9 @@
 # Firefly Cash Converter
 
+A Python tool for converting financial transaction data from various sources (Barclays, PayPal, Trade Republic, etc.) and transferring them to Firefly III personal finance manager.
+
+## Installation
+
 ## Usage
 
 ### Pytr
