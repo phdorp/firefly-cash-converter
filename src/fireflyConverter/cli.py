@@ -1,4 +1,5 @@
 import enum
+import logging
 from argparse import ArgumentParser, Namespace, _SubParsersAction
 from typing import Callable, Dict, List
 
@@ -7,6 +8,8 @@ import toml
 from fireflyConverter import convertData as cdt
 from fireflyConverter import fireflyInterface as ffi
 from fireflyConverter import loadData as ldb
+
+logger = logging.getLogger(__name__)
 
 
 class CommandType(enum.Enum):
@@ -112,15 +115,25 @@ def convert(arguments: Namespace):
     Args:
         arguments (Namespace): Parsed CLI arguments.
     """
+    logger.info(f"Starting convert command for source: {arguments.source}")
+    logger.debug(f"Input file: {arguments.input_file}")
+
     loader = ldb.loaderMapping[arguments.source](arguments.input_file, accountName=arguments.account_name)
+    logger.info(f"Loading transactions from {arguments.source}")
     transactions = loader.load()
+    logger.info(f"Loaded {len(transactions)} transactions")
 
     converter = cdt.ConvertData(transactions)
 
     if arguments.filter_query:
+        logger.info(f"Applying filter query: {arguments.filter_query}")
         converter = converter.filterByQuery(arguments.filter_query)
+        logger.info(f"After filtering: {len(converter.transactions)} transactions remain")
 
-    converter.saveCsv(filePath=f"{arguments.output}/{arguments.file_name}.csv")
+    output_path = f"{arguments.output}/{arguments.file_name}.csv"
+    logger.info(f"Saving converted transactions to: {output_path}")
+    converter.saveCsv(filePath=output_path)
+    logger.info("Convert command completed successfully")
 
 
 def transfer(arguments: Namespace):
@@ -129,24 +142,41 @@ def transfer(arguments: Namespace):
     Args:
         arguments (Namespace): Parsed CLI arguments.
     """
+    logger.info(f"Starting transfer command for source: {arguments.source}")
+
     inputName = arguments.source if arguments.input_name is None else arguments.input_name
     accountName = arguments.source if arguments.account_name is None else arguments.account_name
     inputFile = f"{arguments.input_directory}/{inputName}"
+    logger.debug(f"Input file: {inputFile}, Account: {accountName}")
 
     loader = ldb.loaderMapping[arguments.source](inputFile, accountName=accountName)
+    logger.info(f"Loading transactions from {inputFile}")
     transactions = loader.load()
+    logger.info(f"Loaded {len(transactions)} transactions")
 
+    logger.info(f"Loading Firefly interface configuration from {arguments.config_path}")
     config = toml.load(arguments.config_path)
     if "firefly_interface" not in config:
         raise ValueError("Configuration file must contain a [firefly_interface] section")
     interface = ffi.FireflyInterface(**config["firefly_interface"])
+    logger.debug("Firefly interface initialized successfully")
 
     if arguments.filter_query:
+        logger.info(f"Applying filter query: {arguments.filter_query}")
         transactions = cdt.ConvertData(transactions).filterByQuery(arguments.filter_query).transactions
+        logger.info(f"After filtering: {len(transactions)} transactions remain")
 
+    logger.info(f"Transferring {len(transactions)} transactions to Firefly III")
+    processed_count = 0
     for transaction in transactions:
         response = interface.createTransaction(transaction)
-        print(f"Processed transaction with response: {response.status_code}")
+        processed_count += 1
+        if response.status_code == 200:
+            logger.debug(f"Transaction {processed_count}/{len(transactions)} created successfully (status: {response.status_code})")
+        else:
+            logger.info(f"Transaction {processed_count}/{len(transactions)} processed with status: {response.status_code}")
+
+    logger.info(f"Transfer command completed successfully. Processed {processed_count} transactions")
 
 
 COMMAND_EXECUTION: Dict[CommandType, Callable[[Namespace], None]] = {
