@@ -45,7 +45,9 @@ class TestAccountInterface(TestInterfaceBase):
         for account_name in account_names:
             self._fireflyInterface.createAccount(data.PostAssetAccount(account_name))
 
-        for server_account in self._fireflyInterface.getAccounts():
+        server_account_names = self._fireflyInterface.getAccounts()
+
+        for server_account in server_account_names:
             message = f"Account {server_account.name} was not created on the server."
             self.assertTrue(server_account.name in account_names, message)
             account_names.remove(server_account.name)
