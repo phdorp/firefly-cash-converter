@@ -138,15 +138,18 @@ class TableDataLoader(DataLoader):
             for columnIdx, fieldAlias in zip(columnIdcs, self._fieldAliases):
                 field = self._fieldAliases[fieldAlias]
                 storedData = transactionData.get(field.name, None)
-                inputData = self._fieldTypes[field](self._fieldFilters[field](row[columnIdx]))
+                cellContent = row[columnIdx]
 
-                if storedData is None:
-                    transactionData[field.name] = inputData
-                elif isinstance(inputData, str) and isinstance(storedData, str):
-                    if inputData != "":
-                        transactionData[field.name] += self._fieldMergeSep + inputData
-                else:
-                    raise ValueError(f"Cannot merge multiple values for non-string field {field.name}")
+                if not pd.isna(cellContent):
+                    inputData = self._fieldTypes[field](self._fieldFilters[field](cellContent))
+
+                    if storedData is None:
+                        transactionData[field.name] = inputData
+                    elif isinstance(inputData, str) and isinstance(storedData, str):
+                        if inputData != "":
+                            transactionData[field.name] += self._fieldMergeSep + inputData
+                    else:
+                        raise ValueError(f"Cannot merge multiple values for non-string field {field.name}")
 
             # Only add the transaction if it contains data
             if len(transactionData) > 0:

@@ -1,4 +1,4 @@
-from typing import Optional, Any, Union, overload
+from typing import Any, Optional, Union, overload
 
 from gnucashConverter.data import BaseTransaction, PostAccount
 
@@ -436,5 +436,45 @@ class PayloadFactory:
             params["type"] = account_type
         if date:
             params["date"] = date
+
+        return params
+
+    def getTransactions(
+        self,
+        limit: Optional[int] = None,
+        page: Optional[int] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        type: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Build query parameters for listing transactions.
+
+        Constructs parameters for a GET request to the Firefly III transactions endpoint
+        (/v1/transactions). Only non-None parameters are included.
+
+        Args:
+            limit (Optional[int]): Number of items per page. Defaults to None.
+            page (Optional[int]): Page number for pagination. Defaults to None.
+            start (Optional[str]): Start date of the range (inclusive) in YYYY-MM-DD format. Defaults to None.
+            end (Optional[str]): End date of the range (inclusive) in YYYY-MM-DD format. Defaults to None.
+            type (Optional[str]): Filter on transaction type(s). Available values: all, withdrawal,
+                withdrawals, expense, deposit, deposits, income, transfer, transfers, opening_balance,
+                reconciliation, special, specials, default. Defaults to None.
+
+        Returns:
+            dict[str, Any]: Query parameters dictionary.
+        """
+        params: dict[str, Any] = {}
+
+        if limit is not None:
+            params["limit"] = limit
+        if page is not None:
+            params["page"] = page
+        if start:
+            params["start"] = start
+        if end:
+            params["end"] = end
+        if type:
+            params["type"] = type
 
         return params
