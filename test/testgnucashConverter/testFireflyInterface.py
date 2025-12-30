@@ -20,8 +20,11 @@ class TestInterfaceBase(unittest.TestCase):
         self._transactions = ldb.DataLoaderCommon("test/data/common").load()
 
     def _removeFireflyData(self):
-        self._fireflyInterface.deleteAccounts()
+        """Purges data generated during test runs from test server.
+        If an error occurs during clean up data left on server might lead to failure of future test runs.
+        """
         self._fireflyInterface.purgeUserData()
+        self._fireflyInterface.deleteAccounts()
 
     def _getAccountNames(self) -> Set[str]:
         account_names: Set[str] = set()
