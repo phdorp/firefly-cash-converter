@@ -165,3 +165,17 @@ export FIREFLY_EMAIL="custom@example.com"
 export FIREFLY_PASSWORD="custompass"
 python3 test/fireflyServer/setupToken.py --save
 ```
+
+### Run Tests
+
+Once the test server is running and the API token is configured in the `.env` file, install the package with dev dependencies and run the tests:
+
+```bash
+# Install package with dev dependencies
+pip install -e ".[dev]"
+
+# Run all tests
+python -m unittest discover -s test -p "test*.py"
+```
+
+**Note:** The `.env` file is automatically loaded by the test suite using `python-dotenv` (included in dev dependencies).

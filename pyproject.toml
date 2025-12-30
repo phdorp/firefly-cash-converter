@@ -9,6 +9,11 @@ dependencies = [
     "toml",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "python-dotenv",
+]
+
 [build-system]
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
