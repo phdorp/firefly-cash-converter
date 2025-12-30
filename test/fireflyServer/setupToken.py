@@ -247,21 +247,21 @@ def main():
     print("Access token created successfully!")
     print("=" * 50)
     print()
-    print(f'export API_TOKEN="{access_token}"')
+    print(f'export TEST_API_TOKEN="{access_token}"')
     print()
     print("To use this token, run:")
-    print(f'  export API_TOKEN="{access_token}"')
+    print(f'  export TEST_API_TOKEN="{access_token}"')
     print()
     print("Or save it to a .env file in the repository root:")
     env_file = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
-    print(f"  echo 'API_TOKEN=\"{access_token}\"' > {env_file}")
+    print(f"  echo 'TEST_API_TOKEN=\"{access_token}\"' > {env_file}")
     print()
 
     # Optionally write to .env file
     if "--save" in sys.argv or "-s" in sys.argv:
         try:
             with open(env_file, "w") as f:
-                f.write(f'API_TOKEN="{access_token}"\n')
+                f.write(f'TEST_API_TOKEN="{access_token}"\n')
             print(f"✓ Token saved to {env_file}")
         except Exception as e:
             print(f"Could not save to .env file: {e}")
