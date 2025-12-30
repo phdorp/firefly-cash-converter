@@ -1,12 +1,18 @@
 [project]
 name = "firefly-cash-converter"
 version = "0.0.0"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
     "pandas",
     "numpy",
     "openpyxl",
     "toml",
+    "requests"
+]
+
+[project.optional-dependencies]
+dev = [
+    "python-dotenv",
 ]
 
 [build-system]
