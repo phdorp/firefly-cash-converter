@@ -38,15 +38,35 @@ jobs:
           import time
           import sys
           import subprocess
+          import re
 
           max_attempts = 600  # 10 minutes timeout
           for attempt in range(max_attempts):
               try:
                   response = requests.get('http://localhost/login', timeout=10)
                   print(f"Attempt {attempt+1}: Status {response.status_code}, Length {len(response.text)}")
-                  if response.status_code == 200 and ('_token' in response.text or 'csrf-token' in response.text or 'login' in response.text.lower()):
-                      print("✓ Firefly III is ready!")
-                      sys.exit(0)
+
+                  # Check if we have a valid login page with CSRF token
+                  if response.status_code == 200:
+                      has_csrf = '_token' in response.text or 'csrf-token' in response.text
+                      has_login = 'login' in response.text.lower()
+
+                      if has_csrf and has_login:
+                          # Found login page, now verify the app is fully initialized
+                          # by checking if we can access other pages
+                          try:
+                              profile_resp = requests.get('http://localhost/profile', timeout=10, allow_redirects=True)
+                              # If we get redirected back to login, app is ready but we're not logged in (expected)
+                              # If we get a 500 error, the app might still be initializing
+                              if profile_resp.status_code != 500:
+                                  print("✓ Firefly III is ready!")
+                                  sys.exit(0)
+                          except:
+                              # Profile check failed, but app is responding
+                              if attempt > 120:  # After 2 minutes, assume we're ready
+                                  print("✓ Firefly III app responding (assuming ready)")
+                                  sys.exit(0)
+
               except requests.exceptions.ConnectionError as e:
                   if attempt % 30 == 0:
                       print(f"Attempt {attempt+1}: Connection refused (app not ready yet)")
