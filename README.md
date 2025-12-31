@@ -15,6 +15,12 @@ Install directly from the GitHub repository:
 pip install git+https://github.com/phdorp/gnucash-convert.git@main
 ```
 
+or from [PyPI](https://pypi.org/project/firefly-cash-converter/)
+
+```bash
+pip install firefly-cash-converter
+```
+
 This will install the `cash` command-line tool for converting and transferring financial transactions.
 
 ## Configuration
