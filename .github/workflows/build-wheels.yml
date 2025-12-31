@@ -2,7 +2,7 @@ name: Build and deploy wheels
 
 on:
   push:
-    tags: ['v[0-9].[0-9]+.[0-9]+']
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
 
 jobs:
   build_wheels:
@@ -10,7 +10,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, windows-11-arm, macos-13, macos-14]
+        os: [ubuntu-latest, ubuntu-24.04, windows-latest, macos-13, macos-14]
 
     steps:
       - uses: actions/checkout@v5
@@ -48,7 +48,7 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v4
         with:
           # unpacks all CIBW artifacts into dist/
           pattern: cibw-*
