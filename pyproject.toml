@@ -16,6 +16,10 @@ dev = [
     "pytest",
     "pytest-cov",
 ]
+test = [
+    "python-dotenv",
+    "pytest",
+]
 
 [build-system]
 requires = ["setuptools"]
