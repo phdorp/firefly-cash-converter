@@ -23,6 +23,20 @@ jobs:
           cd test/fireflyServer
           docker compose up -d
 
+      - name: Wait for Firefly III to be ready
+        run: |
+          for i in {1..120}; do
+            if curl -f http://localhost/login 2>/dev/null | grep -q "csrf-token"; then
+              echo "Firefly III is ready!"
+              exit 0
+            fi
+            echo "Waiting for Firefly III... ($i/120)"
+            sleep 1
+          done
+          echo "Firefly III failed to start"
+          docker compose -f test/fireflyServer/docker-compose.yml logs
+          exit 1
+
       - name: Install package with dev dependencies
         run: pip install -e ".[dev]"
 
