@@ -175,7 +175,7 @@ Once the test server is running and the API token is configured in the `.env` fi
 pip install -e ".[dev]"
 
 # Run all tests
-python -m unittest discover -s test -p "test*.py"
+pytest --cov=fireflyConverter test/
 ```
 
 **Note:** The `.env` file is automatically loaded by the test suite using `python-dotenv` (included in dev dependencies).
