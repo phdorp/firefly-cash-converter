@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/phdorp/firefly-cash-converter/compare/v0.1.0...v0.1.1) (2025-12-31)
+
+
+### Documentation
+
+* add pypi installation instructions ([4518138](https://github.com/phdorp/firefly-cash-converter/commit/451813849b35773797abd2e0f24bd42f9aba99c3)), closes [#18](https://github.com/phdorp/firefly-cash-converter/issues/18)
+
 ## 0.1.0 (2025-12-31)
 
 
