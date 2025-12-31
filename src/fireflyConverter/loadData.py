@@ -210,7 +210,7 @@ class DataLoaderXlsx(TableDataLoader):
         `_parseData` to convert the loaded DataFrame into
         `data.BaseTransaction` objects which are stored in `self._transactions`.
         """
-        return self._parseData(pd.read_excel(self._dataPath, engine='openpyxl'))
+        return self._parseData(pd.read_excel(self._dataPath))
 
 
 class DataLoaderCsv(TableDataLoader):
