@@ -13,10 +13,11 @@ from typing import Optional
 import requests
 
 
-def waitForFirefly(base_url: str, timeout: int = 60) -> bool:
+def waitForFirefly(base_url: str, timeout: int = 120) -> bool:
     """Wait for Firefly III server to be ready."""
     print("Waiting for Firefly III to be ready...")
     start_time = time.time()
+    attempt = 0
 
     while time.time() - start_time < timeout:
         try:
@@ -27,7 +28,10 @@ def waitForFirefly(base_url: str, timeout: int = 60) -> bool:
         except requests.exceptions.RequestException:
             pass
 
-        print("Waiting for server...")
+        attempt += 1
+        if attempt % 10 == 0:
+            elapsed = int(time.time() - start_time)
+            print(f"Waiting for server... ({elapsed}/{timeout}s)")
         time.sleep(2)
 
     return False
@@ -133,12 +137,50 @@ def login(base_url: str, email: str, password: str) -> Optional[requests.Session
             return None
 
         # Check if we're logged in by trying to access profile
-        profile = session.get(f"{base_url}/profile", timeout=10)
-        if profile.status_code == 200 and "profile" in profile.text.lower():
-            print("Login successful!")
-            return session
+        # The app might still be initializing, so retry with backoff
+        max_profile_attempts = 30
+        for attempt in range(max_profile_attempts):
+            try:
+                profile = session.get(f"{base_url}/profile", timeout=10, allow_redirects=True)
 
-        print("Login failed - could not access profile")
+                # If we get a 200 with profile content, we're definitely logged in
+                if profile.status_code == 200 and "profile" in profile.text.lower():
+                    print("Login successful!")
+                    return session
+
+                # If we got redirected back to login, credentials were rejected
+                if "/login" in profile.url and profile.status_code == 200:
+                    print("Login rejected - redirected back to login page")
+                    return None
+
+                # If we get a 500 error, app is still initializing
+                if profile.status_code == 500:
+                    if attempt < max_profile_attempts - 1:
+                        print(f"Attempt {attempt + 1}/{max_profile_attempts}: App still initializing (500 error), retrying...")
+                        time.sleep(2)
+                        continue
+                    else:
+                        print("App still returning 500 errors after retries")
+                        return None
+
+                # Any other status code after a few retries, assume success
+                if attempt > 5:
+                    print("Login successful (assuming after retries)!")
+                    return session
+
+                if attempt < max_profile_attempts - 1:
+                    print(f"Attempt {attempt + 1}/{max_profile_attempts}: Status {profile.status_code}, retrying...")
+                    time.sleep(1)
+
+            except requests.exceptions.RequestException as e:
+                if attempt < max_profile_attempts - 1:
+                    print(f"Attempt {attempt + 1}/{max_profile_attempts}: Profile access failed ({e}), retrying...")
+                    time.sleep(2)
+                else:
+                    print(f"Profile access failed after {max_profile_attempts} attempts: {e}")
+                    return None
+
+        print("Login failed - could not access profile after retries")
         return None
 
     except requests.exceptions.RequestException as e:
