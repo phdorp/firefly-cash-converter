@@ -1,6 +1,6 @@
 [project]
 name = "firefly-cash-converter"
-version = "0.1.0"
+version = "0.1.1"
 requires-python = ">=3.11"
 authors = [
     {name = "Philip Dorpmüller", email = "philip.dorpmueller@wb.de"},
