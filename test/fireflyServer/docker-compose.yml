@@ -6,6 +6,7 @@ services:
     restart: always
     volumes:
       - firefly_iii_upload:/var/www/html/storage/upload
+      - ./createUserToken.php:/var/www/html/storage/app/createUserToken.php:ro
     env_file: .env
     networks:
       - firefly_iii
