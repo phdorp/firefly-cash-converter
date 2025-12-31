@@ -131,48 +131,30 @@ For more complex queries, refer to the [pandas query documentation](https://pand
 
 ## Tests
 
-The tests of the firefly interface rely on a local firefly server.
+The tests of the firefly interface rely on a local Firefly III server.
 
-### Setup Test Server
+### 1. Start the Test Server
 
-1. Start the Firefly III server:
+Launch the Firefly III server using Docker Compose:
+
 ```bash
 cd ./test/fireflyServer
 sudo docker compose up
 ```
 
-2. Create an API token automatically:
+Wait for the server to be ready (this may take a minute on first run).
 
-**Option A: Using Python script (recommended)**
-```bash
-# Create token and save to .env file
-python3 test/fireflyServer/setupToken.py --save
+### 2. Create an API Token
 
-# Or just display the token
-python3 test/fireflyServer/setupToken.py
-```
-
-**Option B: Manual setup**
-Register an account at `http://localhost:80` and create a personal access token manually in the Profile section. Then store the token:
+Run the token creation script:
 
 ```bash
-echo 'TEST_API_TOKEN="your-token-here"' > .env
+bash test/fireflyServer/createToken.sh
 ```
 
-The automated scripts use these default credentials:
+This script initializes Laravel Passport, creates a test user with owner permissions (user_role_id = 21), generates a personal access token, and saves it to the `.env` file.
 
-- Email: `test@example.com`
-- Password: `password123`
-
-You can customize them with environment variables:
-
-```bash
-export FIREFLY_EMAIL="custom@example.com"
-export FIREFLY_PASSWORD="custompass"
-python3 test/fireflyServer/setupToken.py --save
-```
-
-### Run Tests
+### 3. Run Tests
 
 Once the test server is running and the API token is configured in the `.env` file, install the package with dev dependencies and run the tests:
 
