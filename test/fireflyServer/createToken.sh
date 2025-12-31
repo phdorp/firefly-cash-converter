@@ -18,7 +18,12 @@ if [ -z "$TOKEN" ]; then
     exit 1
 fi
 
-# Save token to .env file in project root
-cd "$(dirname "$0")/../.."
-echo "TEST_API_TOKEN=$TOKEN" > .env
-echo "✓ Token created successfully and saved to .env"
+# Save token - use GitHub Actions environment if available, otherwise local .env
+if [ -n "$GITHUB_ENV" ]; then
+    echo "TEST_API_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+    echo "✓ Token created successfully (saved to GitHub environment)"
+else
+    cd "$(dirname "$0")/../.."
+    echo "TEST_API_TOKEN=$TOKEN" > .env
+    echo "✓ Token created successfully and saved to .env"
+fi

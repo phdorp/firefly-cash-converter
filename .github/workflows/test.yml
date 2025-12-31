@@ -37,23 +37,8 @@ jobs:
       - name: Install package with dev dependencies
         run: pip install -e ".[dev]"
 
-      - name: Setup Laravel Passport for Firefly III
-        run: |
-          # Initialize Passport keys and personal access client
-          docker exec firefly_iii_core php artisan passport:keys --force
-          docker exec firefly_iii_core php artisan passport:client --personal --name="Test Client" --no-interaction
-
-      - name: Create Firefly III user and API token via CLI
-        run: |
-          docker exec -i firefly_iii_core php < test/fireflyServer/createUserToken.php > /tmp/token_output.txt 2>&1
-          TOKEN=$(grep "^TOKEN=" /tmp/token_output.txt 2>/dev/null | cut -d= -f2 | tr -d '\n\r ')
-          if [ -z "$TOKEN" ]; then
-              echo "❌ Failed to create token"
-              cat /tmp/token_output.txt
-              exit 1
-          fi
-          echo "TEST_API_TOKEN=$TOKEN" >> $GITHUB_ENV
-          echo "✓ Token created successfully"
+      - name: Create Firefly III user and API token
+        run: bash test/fireflyServer/createToken.sh
 
       - name: Run tests
         run: pytest --cov=fireflyConverter test/ --cov-report=html --cov-report=term
