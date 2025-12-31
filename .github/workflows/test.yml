@@ -37,69 +37,97 @@ jobs:
           import requests
           import time
           import sys
-          import subprocess
-          import re
 
-          max_attempts = 600  # 10 minutes timeout
+          max_attempts = 120  # 2 minutes timeout
           for attempt in range(max_attempts):
               try:
-                  response = requests.get('http://127.0.0.1/login', timeout=10)
-                  print(f"Attempt {attempt+1}: Status {response.status_code}, Length {len(response.text)}")
-
-                  # Check if we have a valid login page with CSRF token
+                  response = requests.get('http://127.0.0.1/login', timeout=5)
                   if response.status_code == 200:
-                      has_csrf = '_token' in response.text or 'csrf-token' in response.text
-                      has_login = 'login' in response.text.lower()
-
-                      if has_csrf and has_login:
-                          # Found login page, now verify the app is fully initialized
-                          # by checking if we can access other pages
-                          try:
-                              profile_resp = requests.get('http://127.0.0.1/profile', timeout=10, allow_redirects=True)
-                              # If we get redirected back to login, app is ready but we're not logged in (expected)
-                              # If we get a 500 error, the app might still be initializing
-                              if profile_resp.status_code != 500:
-                                  print("✓ Firefly III is ready!")
-                                  sys.exit(0)
-                          except:
-                              # Profile check failed, but app is responding
-                              if attempt > 120:  # After 2 minutes, assume we're ready
-                                  print("✓ Firefly III app responding (assuming ready)")
-                                  sys.exit(0)
-
-              except requests.exceptions.ConnectionError as e:
-                  if attempt % 30 == 0:
-                      print(f"Attempt {attempt+1}: Connection refused (app not ready yet)")
-              except requests.exceptions.Timeout as e:
-                  if attempt % 30 == 0:
-                      print(f"Attempt {attempt+1}: Timeout (app not responding)")
-              except requests.exceptions.RequestException as e:
-                  if attempt % 30 == 0:
-                      print(f"Attempt {attempt+1}: {type(e).__name__}")
-
-              if attempt % 60 == 0 and attempt > 0:
-                  print(f"Still waiting... ({attempt}/{max_attempts})")
-                  # Show logs every minute
-                  subprocess.run(['docker', 'compose', '-f', 'test/fireflyServer/docker-compose.yml', 'logs', '--tail=20'],
-                                cwd='.')
+                      print(f"✓ Firefly III is ready! (attempt {attempt+1})")
+                      sys.exit(0)
+              except requests.exceptions.RequestException:
+                  if attempt % 10 == 0:
+                      print(f"Waiting for Firefly III... ({attempt+1}/{max_attempts})")
               time.sleep(1)
 
-          print("✗ Firefly III failed to start after 10 minutes")
-          print("\nFinal Docker logs:")
-          subprocess.run(['docker', 'compose', '-f', 'test/fireflyServer/docker-compose.yml', 'logs'], cwd='.')
+          print("✗ Firefly III failed to start after 2 minutes")
           sys.exit(1)
           EOF
 
       - name: Install package with dev dependencies
         run: pip install -e ".[dev]"
 
-      - name: Setup Firefly API token
+      - name: Setup Laravel Passport for Firefly III
         run: |
-          python test/fireflyServer/setupToken.py --save
-        env:
-          FIREFLY_URL: http://127.0.0.1
-          FIREFLY_EMAIL: test@example.com
-          FIREFLY_PASSWORD: password123
+          # Initialize Passport keys and personal access client
+          docker exec firefly_iii_core php artisan passport:keys --force
+          docker exec firefly_iii_core php artisan passport:client --personal --name="Test Client" --no-interaction
+
+      - name: Create Firefly III user and API token via CLI
+        run: |
+          # Create user via Firefly III's built-in user creation, then add token via PHP
+          echo "Creating user via Firefly III..."
+
+          # Use Firefly's user create command (if available) or create via database
+          cat << 'EOFPHP' | docker exec -i firefly_iii_core php > /tmp/token_output.txt 2>&1
+          <?php
+          require __DIR__ . '/vendor/autoload.php';
+          $app = require_once __DIR__ . '/bootstrap/app.php';
+          $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
+          $kernel->bootstrap();
+
+          use FireflyIII\User;
+          use FireflyIII\Models\UserGroup;
+          use FireflyIII\Models\GroupMembership;
+          use Illuminate\Support\Facades\Hash;
+
+          try {
+              $email = 'test@example.com';
+              $password = 'password123';
+
+              $user = User::where('email', $email)->first();
+              if (!$user) {
+                  // Create user group first
+                  $group = new UserGroup();
+                  $group->title = 'Test User Group';
+                  $group->save();
+
+                  // Create user
+                  $user = new User();
+                  $user->email = $email;
+                  $user->password = Hash::make($password);
+                  $user->blocked = false;
+                  $user->blocked_code = null;
+                  $user->user_group_id = $group->id;
+                  $user->save();
+
+                  // Create group membership with owner role
+                  $membership = new GroupMembership();
+                  $membership->user_id = $user->id;
+                  $membership->user_group_id = $group->id;
+                  $membership->user_role_id = 21; // 21 = owner role (full permissions including purge)
+                  $membership->save();
+              }
+
+              $token = $user->createToken('Test Token');
+              echo "TOKEN=" . $token->accessToken . "\n";
+          } catch (Exception $e) {
+              echo "ERROR: " . $e->getMessage() . "\n";
+              exit(1);
+          }
+          EOFPHP
+
+          # Extract token and save to environment variable for tests
+          echo "=== PHP Script Output ==="
+          cat /tmp/token_output.txt || echo "File not found or empty"
+          echo "=== End Output ==="
+          TOKEN=$(grep "^TOKEN=" /tmp/token_output.txt 2>/dev/null | cut -d= -f2 | tr -d '\n\r ')
+          if [ -z "$TOKEN" ]; then
+              echo "❌ Failed to create token - no TOKEN= line found"
+              exit 1
+          fi
+          echo "TEST_API_TOKEN=$TOKEN" >> $GITHUB_ENV
+          echo "✓ Token created successfully"
 
       - name: Run tests
         run: pytest --cov=fireflyConverter test/ --cov-report=html --cov-report=term
