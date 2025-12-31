@@ -23,19 +23,52 @@ jobs:
           cd test/fireflyServer
           docker compose up -d
 
+      - name: Show Firefly startup logs
+        run: |
+          sleep 10
+          docker compose -f test/fireflyServer/docker-compose.yml logs --tail=50
+
+      - name: Install requests for health check
+        run: pip install requests
+
       - name: Wait for Firefly III to be ready
         run: |
-          for i in {1..120}; do
-            if curl -f http://localhost/login 2>/dev/null | grep -q "csrf-token"; then
-              echo "Firefly III is ready!"
-              exit 0
-            fi
-            echo "Waiting for Firefly III... ($i/120)"
-            sleep 1
-          done
-          echo "Firefly III failed to start"
-          docker compose -f test/fireflyServer/docker-compose.yml logs
-          exit 1
+          python3 << 'EOF'
+          import requests
+          import time
+          import sys
+          import subprocess
+
+          max_attempts = 600  # 10 minutes timeout
+          for attempt in range(max_attempts):
+              try:
+                  response = requests.get('http://localhost/login', timeout=10)
+                  print(f"Attempt {attempt+1}: Status {response.status_code}, Length {len(response.text)}")
+                  if response.status_code == 200 and ('_token' in response.text or 'csrf-token' in response.text or 'login' in response.text.lower()):
+                      print("✓ Firefly III is ready!")
+                      sys.exit(0)
+              except requests.exceptions.ConnectionError as e:
+                  if attempt % 30 == 0:
+                      print(f"Attempt {attempt+1}: Connection refused (app not ready yet)")
+              except requests.exceptions.Timeout as e:
+                  if attempt % 30 == 0:
+                      print(f"Attempt {attempt+1}: Timeout (app not responding)")
+              except requests.exceptions.RequestException as e:
+                  if attempt % 30 == 0:
+                      print(f"Attempt {attempt+1}: {type(e).__name__}")
+
+              if attempt % 60 == 0 and attempt > 0:
+                  print(f"Still waiting... ({attempt}/{max_attempts})")
+                  # Show logs every minute
+                  subprocess.run(['docker', 'compose', '-f', 'test/fireflyServer/docker-compose.yml', 'logs', '--tail=20'],
+                                cwd='.')
+              time.sleep(1)
+
+          print("✗ Firefly III failed to start after 10 minutes")
+          print("\nFinal Docker logs:")
+          subprocess.run(['docker', 'compose', '-f', 'test/fireflyServer/docker-compose.yml', 'logs'], cwd='.')
+          sys.exit(1)
+          EOF
 
       - name: Install package with dev dependencies
         run: pip install -e ".[dev]"
