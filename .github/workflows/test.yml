@@ -43,7 +43,7 @@ jobs:
           max_attempts = 600  # 10 minutes timeout
           for attempt in range(max_attempts):
               try:
-                  response = requests.get('http://localhost/login', timeout=10)
+                  response = requests.get('http://127.0.0.1/login', timeout=10)
                   print(f"Attempt {attempt+1}: Status {response.status_code}, Length {len(response.text)}")
 
                   # Check if we have a valid login page with CSRF token
@@ -55,7 +55,7 @@ jobs:
                           # Found login page, now verify the app is fully initialized
                           # by checking if we can access other pages
                           try:
-                              profile_resp = requests.get('http://localhost/profile', timeout=10, allow_redirects=True)
+                              profile_resp = requests.get('http://127.0.0.1/profile', timeout=10, allow_redirects=True)
                               # If we get redirected back to login, app is ready but we're not logged in (expected)
                               # If we get a 500 error, the app might still be initializing
                               if profile_resp.status_code != 500:
@@ -97,7 +97,7 @@ jobs:
         run: |
           python test/fireflyServer/setupToken.py --save
         env:
-          FIREFLY_URL: http://localhost
+          FIREFLY_URL: http://127.0.0.1
           FIREFLY_EMAIL: test@example.com
           FIREFLY_PASSWORD: password123
 
