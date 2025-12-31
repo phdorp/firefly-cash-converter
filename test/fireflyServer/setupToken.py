@@ -138,43 +138,62 @@ def login(base_url: str, email: str, password: str) -> Optional[requests.Session
 
         # Check if we're logged in by trying to access profile
         # The app might still be initializing, so retry with backoff
+        # Also check for proper authentication markers in the response
         max_profile_attempts = 30
         for attempt in range(max_profile_attempts):
             try:
-                profile = session.get(f"{base_url}/profile", timeout=10, allow_redirects=True)
+                profile = session.get(f"{base_url}/profile", timeout=10, allow_redirects=False)
 
-                # If we get a 200 with profile content, we're definitely logged in
-                if profile.status_code == 200 and "profile" in profile.text.lower():
-                    print("Login successful!")
-                    return session
+                # If we get a 200 with actual profile content (not login page), we're logged in
+                if profile.status_code == 200:
+                    # Check if we actually got the profile page (not a redirect/login page)
+                    has_profile_content = ("profile" in profile.text.lower() and 
+                                          "email" in profile.text.lower())
+                    if has_profile_content:
+                        print("Login successful!")
+                        return session
 
-                # If we got redirected back to login, credentials were rejected
-                if "/login" in profile.url and profile.status_code == 200:
-                    print("Login rejected - redirected back to login page")
-                    return None
+                # If we get 302 redirect, we're not authenticated (redirect to login)
+                if profile.status_code == 302:
+                    location = profile.headers.get('Location', '').lower()
+                    if 'login' in location:
+                        # Still being redirected to login, but try a few more times
+                        if attempt < 10:
+                            if attempt < max_profile_attempts - 1:
+                                print(f"Attempt {attempt + 1}/{max_profile_attempts}: Redirected to login, retrying...")
+                                time.sleep(2)
+                                continue
+                        else:
+                            # After multiple retries, give up
+                            print("Could not authenticate - keeps redirecting to login")
+                            return None
+                    else:
+                        # Different redirect, follow it
+                        profile = session.get(f"{base_url}{location}", timeout=10, allow_redirects=True)
+                        if profile.status_code == 200 and "profile" in profile.text.lower():
+                            print("Login successful!")
+                            return session
 
                 # If we get a 500 error, app is still initializing
                 if profile.status_code == 500:
                     if attempt < max_profile_attempts - 1:
-                        print(f"Attempt {attempt + 1}/{max_profile_attempts}: App still initializing (500 error), retrying...")
+                        if attempt % 3 == 0:
+                            print(f"Attempt {attempt + 1}/{max_profile_attempts}: App still initializing (500 error), retrying...")
                         time.sleep(2)
                         continue
                     else:
                         print("App still returning 500 errors after retries")
                         return None
 
-                # Any other status code after a few retries, assume success
-                if attempt > 5:
-                    print("Login successful (assuming after retries)!")
-                    return session
-
+                # Any other status code, log and continue
                 if attempt < max_profile_attempts - 1:
                     print(f"Attempt {attempt + 1}/{max_profile_attempts}: Status {profile.status_code}, retrying...")
                     time.sleep(1)
 
             except requests.exceptions.RequestException as e:
                 if attempt < max_profile_attempts - 1:
-                    print(f"Attempt {attempt + 1}/{max_profile_attempts}: Profile access failed ({e}), retrying...")
+                    if attempt % 3 == 0:
+                        print(f"Attempt {attempt + 1}/{max_profile_attempts}: Profile access failed, retrying...")
                     time.sleep(2)
                 else:
                     print(f"Profile access failed after {max_profile_attempts} attempts: {e}")
@@ -207,33 +226,67 @@ def getCsrfToken(session: requests.Session, base_url: str) -> Optional[str]:
 
 
 def createToken(session: requests.Session, base_url: str, csrf_token: str) -> Optional[str]:
-    """Create a personal access token."""
-    try:
-        print("Creating personal access token...")
-        response = session.post(
-            f"{base_url}/oauth/personal-access-tokens",
-            headers={
-                "Content-Type": "application/json",
-                "X-CSRF-TOKEN": csrf_token,
-                "Accept": "application/json",
-            },
-            json={"name": f"Test Token {int(time.time())}"},
-            timeout=10,
-        )
+    """Create a personal access token with retry logic."""
+    print("Creating personal access token...")
+    max_attempts = 10
+    
+    for attempt in range(max_attempts):
+        try:
+            response = session.post(
+                f"{base_url}/oauth/personal-access-tokens",
+                headers={
+                    "Content-Type": "application/json",
+                    "X-CSRF-TOKEN": csrf_token,
+                    "Accept": "application/json",
+                },
+                json={"name": f"Test Token {int(time.time())}"},
+                timeout=10,
+            )
 
-        if response.status_code == 200:
-            data = response.json()
-            token = data.get("accessToken")
-            if token:
-                return token
+            if response.status_code == 200:
+                data = response.json()
+                token = data.get("accessToken")
+                if token:
+                    print("Token creation successful!")
+                    return token
 
-        print(f"Token creation failed: {response.status_code}")
-        print(f"Response: {response.text}")
-        return None
+            # 401 Unauthenticated - session might not be properly authenticated
+            if response.status_code == 401:
+                if attempt < max_attempts - 1:
+                    print(f"Attempt {attempt + 1}/{max_attempts}: Not authenticated (401), retrying...")
+                    time.sleep(2)
+                    continue
+                else:
+                    print(f"Token creation failed: {response.status_code}")
+                    print(f"Response: {response.text}")
+                    return None
+            
+            # 500 error - app might be initializing
+            if response.status_code == 500:
+                if attempt < max_attempts - 1:
+                    print(f"Attempt {attempt + 1}/{max_attempts}: Server error (500), retrying...")
+                    time.sleep(2)
+                    continue
+                else:
+                    print(f"Token creation failed after retries: {response.status_code}")
+                    print(f"Response: {response.text}")
+                    return None
+            
+            # Any other error
+            print(f"Token creation failed: {response.status_code}")
+            print(f"Response: {response.text}")
+            return None
 
-    except requests.exceptions.RequestException as e:
-        print(f"Error creating token: {e}")
-        return None
+        except requests.exceptions.RequestException as e:
+            if attempt < max_attempts - 1:
+                print(f"Attempt {attempt + 1}/{max_attempts}: Request failed, retrying...")
+                time.sleep(2)
+                continue
+            else:
+                print(f"Error creating token after {max_attempts} attempts: {e}")
+                return None
+    
+    return None
 
 
 def main():
