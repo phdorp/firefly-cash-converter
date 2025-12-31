@@ -313,10 +313,26 @@ def main():
     session = requests.Session()
 
     # Try to register (might fail if user exists, which is fine)
-    registerUser(base_url, email, password, session)
+    reg_success = registerUser(base_url, email, password, session)
 
-    # Login (reusing session from registration in case user was auto-logged-in)
-    session = login(base_url, email, password, session)
+    # Check if registration auto-logged us in
+    if reg_success:
+        print("Checking if registration auto-logged us in...")
+        try:
+            profile_check = session.get(f"{base_url}/profile", timeout=10, allow_redirects=False)
+            if profile_check.status_code == 200 and "email" in profile_check.text.lower():
+                print("✓ Already logged in from registration!")
+            else:
+                print("Not logged in yet, attempting login...")
+                session = login(base_url, email, password, session)
+        except Exception as e:
+            print(f"Profile check failed: {e}, attempting login...")
+            session = login(base_url, email, password, session)
+    else:
+        # Registration failed (user exists), need to login
+        print("Registration failed/user exists, attempting login...")
+        session = login(base_url, email, password, session)
+
     if not session:
         print("\nError: Could not login. Please:")
         print(f"1. Register manually at {base_url}/register")
