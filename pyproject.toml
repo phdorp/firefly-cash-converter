@@ -2,6 +2,16 @@
 name = "firefly-cash-converter"
 version = "0.0.0"
 requires-python = ">=3.11"
+authors = [
+    {name = "Philip Dorpmüller", email = "philip.dorpmueller@wb.de"},
+]
+description = "A tool to convert financial data for Firefly III"
+readme = "README.md"
+license = {text = "MIT"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+]
 dependencies = [
     "pandas",
     "numpy",
