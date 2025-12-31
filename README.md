@@ -9,13 +9,13 @@ A Python tool for converting financial transaction data from various sources (Ba
 
 ## Installation
 
-Install directly from the GitHub repository
+Install directly from the GitHub repository:
 
 ```bash
 pip install git+https://github.com/phdorp/gnucash-convert.git@main
 ```
 
-or from [pyi](https://pypi.org/project/firefly-cash-converter/)
+or from [PyPI](https://pypi.org/project/firefly-cash-converter/)
 
 ```bash
 pip install firefly-cash-converter
