@@ -98,10 +98,11 @@ def registerUser(base_url: str, email: str, password: str, session: requests.Ses
         return False
 
 
-def login(base_url: str, email: str, password: str) -> Optional[requests.Session]:
+def login(base_url: str, email: str, password: str, session: Optional[requests.Session] = None) -> Optional[requests.Session]:
     """Login and get authenticated session."""
     print("Logging in...")
-    session = requests.Session()
+    if session is None:
+        session = requests.Session()
 
     try:
         # First, get the login page to get CSRF token
@@ -147,7 +148,7 @@ def login(base_url: str, email: str, password: str) -> Optional[requests.Session
                 # If we get a 200 with actual profile content (not login page), we're logged in
                 if profile.status_code == 200:
                     # Check if we actually got the profile page (not a redirect/login page)
-                    has_profile_content = ("profile" in profile.text.lower() and 
+                    has_profile_content = ("profile" in profile.text.lower() and
                                           "email" in profile.text.lower())
                     if has_profile_content:
                         print("Login successful!")
@@ -229,7 +230,7 @@ def createToken(session: requests.Session, base_url: str, csrf_token: str) -> Op
     """Create a personal access token with retry logic."""
     print("Creating personal access token...")
     max_attempts = 10
-    
+
     for attempt in range(max_attempts):
         try:
             response = session.post(
@@ -260,7 +261,7 @@ def createToken(session: requests.Session, base_url: str, csrf_token: str) -> Op
                     print(f"Token creation failed: {response.status_code}")
                     print(f"Response: {response.text}")
                     return None
-            
+
             # 500 error - app might be initializing
             if response.status_code == 500:
                 if attempt < max_attempts - 1:
@@ -271,7 +272,7 @@ def createToken(session: requests.Session, base_url: str, csrf_token: str) -> Op
                     print(f"Token creation failed after retries: {response.status_code}")
                     print(f"Response: {response.text}")
                     return None
-            
+
             # Any other error
             print(f"Token creation failed: {response.status_code}")
             print(f"Response: {response.text}")
@@ -285,7 +286,7 @@ def createToken(session: requests.Session, base_url: str, csrf_token: str) -> Op
             else:
                 print(f"Error creating token after {max_attempts} attempts: {e}")
                 return None
-    
+
     return None
 
 
@@ -314,8 +315,8 @@ def main():
     # Try to register (might fail if user exists, which is fine)
     registerUser(base_url, email, password, session)
 
-    # Login
-    session = login(base_url, email, password)
+    # Login (reusing session from registration in case user was auto-logged-in)
+    session = login(base_url, email, password, session)
     if not session:
         print("\nError: Could not login. Please:")
         print(f"1. Register manually at {base_url}/register")
