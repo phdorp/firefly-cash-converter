@@ -70,6 +70,7 @@ def registerUser(base_url: str, email: str, password: str, session: requests.Ses
             return False
 
         # Now post with CSRF token
+        print(f"[DEBUG] Cookies before registration POST: {len(session.cookies)}")
         response = session.post(
             f"{base_url}/register",
             data={
@@ -81,6 +82,11 @@ def registerUser(base_url: str, email: str, password: str, session: requests.Ses
             allow_redirects=True,
             timeout=10,
         )
+
+        print(f"[DEBUG] Registration POST: status={response.status_code}, url={response.url}")
+        print(f"[DEBUG] Cookies after registration: {len(session.cookies)}")
+        for cookie in session.cookies:
+            print(f"[DEBUG]   Cookie: {cookie.name}={cookie.value[:20]}... domain={cookie.domain} path={cookie.path}")
 
         # Check if registration was successful
         if response.status_code == 200:
@@ -101,12 +107,18 @@ def registerUser(base_url: str, email: str, password: str, session: requests.Ses
 def login(base_url: str, email: str, password: str, session: Optional[requests.Session] = None) -> Optional[requests.Session]:
     """Login and get authenticated session."""
     print("Logging in...")
+    print(f"[DEBUG] Session object ID: {id(session) if session else 'None'}")
     if session is None:
         session = requests.Session()
+
+    print(f"[DEBUG] Cookies before login: {len(session.cookies)}")
+    for cookie in session.cookies:
+        print(f"[DEBUG]   Cookie: {cookie.name} domain={cookie.domain} path={cookie.path}")
 
     try:
         # First, get the login page to get CSRF token
         login_page = session.get(f"{base_url}/login", timeout=10)
+        print(f"[DEBUG] Login GET: status={login_page.status_code}, cookies after={len(session.cookies)}")
 
         # Extract CSRF token from login page
         csrf_token = extractCsrfToken(login_page.text)
@@ -115,6 +127,7 @@ def login(base_url: str, email: str, password: str, session: Optional[requests.S
             return None
 
         # Attempt login with CSRF token
+        print(f"[DEBUG] About to POST login with {len(session.cookies)} cookies")
         response = session.post(
             f"{base_url}/login",
             data={
@@ -125,6 +138,11 @@ def login(base_url: str, email: str, password: str, session: Optional[requests.S
             allow_redirects=True,
             timeout=10,
         )
+
+        print(f"[DEBUG] Login POST: status={response.status_code}, final_url={response.url}")
+        print(f"[DEBUG] Cookies after login POST: {len(session.cookies)}")
+        for cookie in session.cookies:
+            print(f"[DEBUG]   Cookie: {cookie.name} domain={cookie.domain}")
 
         # Fail fast if the login POST itself failed
         if response.status_code not in (200, 302):
@@ -318,8 +336,11 @@ def main():
     # Check if registration auto-logged us in
     if reg_success:
         print("Checking if registration auto-logged us in...")
+        print(f"[DEBUG] Session cookies before profile check: {len(session.cookies)}")
         try:
             profile_check = session.get(f"{base_url}/profile", timeout=10, allow_redirects=False)
+            print(f"[DEBUG] Profile check: status={profile_check.status_code}, Location={profile_check.headers.get('Location', 'none')}")
+            print(f"[DEBUG] Cookies sent with profile request: {len(session.cookies)}")
             if profile_check.status_code == 200 and "email" in profile_check.text.lower():
                 print("✓ Already logged in from registration!")
             else:
