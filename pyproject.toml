@@ -41,3 +41,19 @@ testpaths = ["test"]
 python_files = "test*.py"
 python_classes = "Test*"
 python_functions = "test*"
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["*/test/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
