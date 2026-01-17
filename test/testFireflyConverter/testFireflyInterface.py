@@ -7,6 +7,116 @@ from fireflyConverter import fireflyInterface as ffi
 from fireflyConverter import loadData as ldb
 
 
+def create_test_rules(rule_group_id: int, title_prefix: str = "Test") -> list:
+    """Create a list of test rules for a given rule group.
+
+    Args:
+        rule_group_id: The ID of the rule group to assign rules to.
+        title_prefix: Prefix for rule titles (default: "Test").
+
+    Returns:
+        List of PostRule objects.
+    """
+    # Test rule 1 definitions
+    test_rule_1_triggers = [
+        {
+            "type": "description_is",
+            "value": "test",
+            "order": 1,
+            "active": True,
+            "prohibited": False,
+            "stop_processing": False,
+        },
+        {
+            "type": "amount_more",
+            "value": "50",
+            "order": 2,
+            "active": True,
+            "prohibited": False,
+            "stop_processing": False,
+        },
+    ]
+
+    test_rule_1_actions = [
+        {
+            "type": "set_category",
+            "value": "Test Category",
+            "order": 1,
+            "active": True,
+            "stop_processing": False,
+        },
+        {
+            "type": "add_tag",
+            "value": "test-tag",
+            "order": 2,
+            "active": True,
+            "stop_processing": False,
+        },
+    ]
+
+    # Test rule 2 definitions
+    test_rule_2_triggers = [
+        {
+            "type": "amount_more",
+            "value": "100",
+            "order": 1,
+            "active": True,
+            "prohibited": False,
+            "stop_processing": False,
+        },
+        {
+            "type": "source_account_starts",
+            "value": "Savings",
+            "order": 2,
+            "active": True,
+            "prohibited": False,
+            "stop_processing": False,
+        },
+    ]
+
+    test_rule_2_actions = [
+        {
+            "type": "set_category",
+            "value": "Large Transactions",
+            "order": 1,
+            "active": True,
+            "stop_processing": False,
+        },
+        {
+            "type": "add_tag",
+            "value": "large-amount",
+            "order": 2,
+            "active": True,
+            "stop_processing": False,
+        },
+    ]
+
+    return [
+        data.PostRule(
+            title=f"{title_prefix} Rule 1",
+            description="First test rule",
+            trigger="store-journal",
+            rule_group_id=rule_group_id,
+            active=True,
+            strict=False,
+            stop_processing=False,
+            triggers=test_rule_1_triggers,
+            actions=test_rule_1_actions,
+        ),
+        data.PostRule(
+            title=f"{title_prefix} Rule 2",
+            description="Second test rule",
+            trigger="store-journal",
+            rule_group_id=rule_group_id,
+            active=True,
+            strict=False,
+            stop_processing=False,
+            triggers=test_rule_2_triggers,
+            actions=test_rule_2_actions,
+        ),
+    ]
+
+
 class TestInterfaceBase(unittest.TestCase):
     def setUp(self):
         api_token = os.getenv("TEST_API_TOKEN")
@@ -92,94 +202,7 @@ class TestRuleInterface(TestInterfaceBase):
         rule_group_id = int(response.json()["data"]["id"])
 
         # Create test rules in a list, all assigned to the rule group
-        self._rules = [
-            data.PostRule(
-                title="Test Rule 1",
-                description="First test rule",
-                trigger="store-journal",
-                rule_group_id=rule_group_id,
-                active=True,
-                strict=False,
-                stop_processing=False,
-                triggers=[
-                    {
-                        "type": "description_is",
-                        "value": "test",
-                        "order": 1,
-                        "active": True,
-                        "prohibited": False,
-                        "stop_processing": False,
-                    },
-                    {
-                        "type": "amount_more",
-                        "value": "50",
-                        "order": 2,
-                        "active": True,
-                        "prohibited": False,
-                        "stop_processing": False,
-                    },
-                ],
-                actions=[
-                    {
-                        "type": "set_category",
-                        "value": "Test Category",
-                        "order": 1,
-                        "active": True,
-                        "stop_processing": False,
-                    },
-                    {
-                        "type": "add_tag",
-                        "value": "test-tag",
-                        "order": 2,
-                        "active": True,
-                        "stop_processing": False,
-                    },
-                ],
-            ),
-            data.PostRule(
-                title="Test Rule 2",
-                description="Second test rule",
-                trigger="store-journal",
-                rule_group_id=rule_group_id,
-                active=True,
-                strict=False,
-                stop_processing=False,
-                triggers=[
-                    {
-                        "type": "amount_more",
-                        "value": "100",
-                        "order": 1,
-                        "active": True,
-                        "prohibited": False,
-                        "stop_processing": False,
-                    },
-                    {
-                        "type": "source_account_starts",
-                        "value": "Savings",
-                        "order": 2,
-                        "active": True,
-                        "prohibited": False,
-                        "stop_processing": False,
-                    },
-                ],
-                actions=[
-                    {
-                        "type": "set_category",
-                        "value": "Large Transactions",
-                        "order": 1,
-                        "active": True,
-                        "stop_processing": False,
-                    },
-                    {
-                        "type": "add_tag",
-                        "value": "large-amount",
-                        "order": 2,
-                        "active": True,
-                        "stop_processing": False,
-                    },
-                ],
-            ),
-        ]
+        self._rules = create_test_rules(rule_group_id, "Test")
 
         # Create the rules on the server
         for rule in self._rules:
