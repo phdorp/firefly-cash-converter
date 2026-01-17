@@ -401,11 +401,11 @@ class FireflyInterface:
         logger.debug(f"Rule {rule.title} created successfully (status: {response.status_code})")
         return response
 
-    def deleteRule(self, rule_id: str) -> requests.Response:
+    def deleteRule(self, rule_id: int) -> requests.Response:
         """Delete a rule on the Firefly III server.
 
         Args:
-            rule_id (str): The Firefly rule ID to delete.
+            rule_id (int): The Firefly rule ID to delete.
 
         Returns:
             requests.Response: The HTTP response from the Firefly API.
@@ -420,14 +420,14 @@ class FireflyInterface:
         logger.debug(f"Rule {rule_id} deleted successfully")
         return resp
 
-    def deleteRules(self, rule_ids: Optional[List[str]] = None) -> None:
+    def deleteRules(self, rule_ids: Optional[List[int]] = None) -> None:
         """Delete one or more rules from the Firefly III server.
 
         If no rule IDs are provided, fetches all rules from the server and deletes them.
         Otherwise, deletes only the specified rules.
 
         Args:
-            rule_ids (Optional[List[str]]): List of Firefly rule IDs to delete.
+            rule_ids (Optional[List[int]]): List of Firefly rule IDs to delete.
                 If None, all rules on the server will be fetched and deleted.
                 Defaults to None.
 
@@ -440,7 +440,7 @@ class FireflyInterface:
         if rule_ids is None:
             logger.info("No rule IDs provided, fetching all rules for deletion")
             rules = self.getRules()
-            rule_ids = [str(rule.id) for rule in rules]
+            rule_ids = [rule.id for rule in rules]
 
         logger.info(f"Deleting {len(rule_ids)} rules from Firefly III")
         for rule_id in rule_ids:
