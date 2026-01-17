@@ -3,7 +3,7 @@ from __future__ import annotations
 import ast
 import enum
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union, overload
 
 import requests
 
@@ -377,7 +377,7 @@ class FireflyInterface:
         ruleGroups: List[data.GetRuleGroup] = []
         for response in ruleGroupResponses:
             ruleGroupData = response.get("attributes", {})
-            ruleGroupData["id"] = response.get("id")
+            ruleGroupData["id"] = int(response.get("id"))
             ruleGroups.append(data.GetRuleGroup(**ruleGroupData))
         return ruleGroups
 
@@ -467,6 +467,7 @@ class FireflyInterface:
         logger.debug(f"Rule group {ruleGroup.title} created successfully (status: {response.status_code})")
         return response
 
+    @overload
     def applyRuleGroup(
         self,
         rule_group_id: int,
@@ -491,6 +492,71 @@ class FireflyInterface:
         Raises:
             requests.HTTPError: If the HTTP request fails.
         """
+        ...
+
+    @overload
+    def applyRuleGroup(
+        self,
+        rule_group_id: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        accounts: Optional[List[str]] = None,
+    ) -> requests.Response:
+        """Trigger/apply a rule group to existing transactions on the Firefly III server.
+
+        Posts a request to the trigger endpoint to apply a rule group's rules to
+        existing transactions, optionally filtered by date range and accounts.
+
+        Args:
+            rule_group_id (str): The Firefly rule group title to trigger.
+            start_date (Optional[str]): Start date for transactions to apply rules to (YYYY-MM-DD format). Defaults to None.
+            end_date (Optional[str]): End date for transactions to apply rules to (YYYY-MM-DD format). Defaults to None.
+            accounts (Optional[List[str]]): Array of account IDs to limit rule application to. Defaults to None.
+
+        Returns:
+            requests.Response: The HTTP response from the Firefly API.
+
+        Raises:
+            ValueError: If no matching rule group is found or multiple matches exist.
+            requests.HTTPError: If the HTTP request fails.
+        """
+        ...
+
+    def applyRuleGroup(
+        self,
+        rule_group_id: Union[int, str],
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        accounts: Optional[List[str]] = None,
+    ) -> requests.Response:
+        """Trigger/apply a rule group to existing transactions on the Firefly III server.
+
+        Posts a request to the trigger endpoint to apply a rule group's rules to
+        existing transactions, optionally filtered by date range and accounts.
+
+        Args:
+            rule_group_id (Union[int, str]): The Firefly rule group ID or title to trigger.
+            start_date (Optional[str]): Start date for transactions to apply rules to (YYYY-MM-DD format). Defaults to None.
+            end_date (Optional[str]): End date for transactions to apply rules to (YYYY-MM-DD format). Defaults to None.
+            accounts (Optional[List[str]]): Array of account IDs to limit rule application to. Defaults to None.
+
+        Returns:
+            requests.Response: The HTTP response from the Firefly API.
+
+        Raises:
+            ValueError: If rule_group_id is a title and no matching rule group is found or multiple matches exist.
+            requests.HTTPError: If the HTTP request fails.
+        """
+        # Resolve title to ID if needed
+        if isinstance(rule_group_id, str):
+            rule_groups = self.getRuleGroups()
+            matches = [rg for rg in rule_groups if rg.title == rule_group_id]
+            if len(matches) == 0:
+                raise ValueError(f"No rule group found with title: {rule_group_id}")
+            elif len(matches) > 1:
+                raise ValueError(f"Ambiguous rule group title '{rule_group_id}': found {len(matches)} matches")
+            rule_group_id = matches[0].id
+
         logger.info(f"Triggering rule group: {rule_group_id}")
         url = f"{self._api_url}/rule-groups/{rule_group_id}/trigger"
         payload = self._payloadFactory.postApplyRuleGroup(start_date, end_date, accounts)
@@ -499,6 +565,7 @@ class FireflyInterface:
         logger.debug(f"Rule group {rule_group_id} triggered successfully (status: {response.status_code})")
         return response
 
+    @overload
     def deleteRuleGroup(self, rule_group_id: int) -> requests.Response:
         """Delete a rule group on the Firefly III server.
 
@@ -511,6 +578,47 @@ class FireflyInterface:
         Raises:
             requests.HTTPError: If the HTTP request fails.
         """
+        ...
+
+    @overload
+    def deleteRuleGroup(self, rule_group_id: str) -> requests.Response:
+        """Delete a rule group on the Firefly III server.
+
+        Args:
+            rule_group_id (str): The Firefly rule group title to delete.
+
+        Returns:
+            requests.Response: The HTTP response from the Firefly API.
+
+        Raises:
+            ValueError: If no matching rule group is found or multiple matches exist.
+            requests.HTTPError: If the HTTP request fails.
+        """
+        ...
+
+    def deleteRuleGroup(self, rule_group_id: Union[int, str]) -> requests.Response:
+        """Delete a rule group on the Firefly III server.
+
+        Args:
+            rule_group_id (Union[int, str]): The Firefly rule group ID or title to delete.
+
+        Returns:
+            requests.Response: The HTTP response from the Firefly API.
+
+        Raises:
+            ValueError: If rule_group_id is a title and no matching rule group is found or multiple matches exist.
+            requests.HTTPError: If the HTTP request fails.
+        """
+        # Resolve title to ID if needed
+        if isinstance(rule_group_id, str):
+            rule_groups = self.getRuleGroups()
+            matches = [rg for rg in rule_groups if rg.title == rule_group_id]
+            if len(matches) == 0:
+                raise ValueError(f"No rule group found with title: {rule_group_id}")
+            elif len(matches) > 1:
+                raise ValueError(f"Ambiguous rule group title '{rule_group_id}': found {len(matches)} matches")
+            rule_group_id = matches[0].id
+
         logger.info(f"Deleting rule group: {rule_group_id}")
         url = f"{self._api_url}/rule-groups/{rule_group_id}"
         resp = self._session.delete(url)
@@ -518,6 +626,7 @@ class FireflyInterface:
         logger.debug(f"Rule group {rule_group_id} deleted successfully")
         return resp
 
+    @overload
     def deleteRuleGroups(self, rule_group_ids: Optional[List[int]] = None) -> None:
         """Delete one or more rule groups from the Firefly III server.
 
@@ -533,6 +642,47 @@ class FireflyInterface:
             None
 
         Raises:
+            requests.HTTPError: If any deletion request fails.
+        """
+        ...
+
+    @overload
+    def deleteRuleGroups(self, rule_group_ids: Optional[List[str]] = None) -> None:
+        """Delete one or more rule groups from the Firefly III server.
+
+        If no rule group IDs are provided, fetches all rule groups from the server and deletes them.
+        Otherwise, deletes only the specified rule groups.
+
+        Args:
+            rule_group_ids (Optional[List[str]]): List of Firefly rule group titles to delete.
+                If None, all rule groups on the server will be fetched and deleted.
+                Defaults to None.
+
+        Returns:
+            None
+
+        Raises:
+            ValueError: If any rule_group_id is a title and no matching rule group is found or multiple matches exist.
+            requests.HTTPError: If any deletion request fails.
+        """
+        ...
+
+    def deleteRuleGroups(self, rule_group_ids: Optional[Union[List[int], List[str]]] = None) -> None:
+        """Delete one or more rule groups from the Firefly III server.
+
+        If no rule group IDs are provided, fetches all rule groups from the server and deletes them.
+        Otherwise, deletes only the specified rule groups.
+
+        Args:
+            rule_group_ids (Optional[Union[List[int], List[str]]]): List of Firefly rule group IDs or titles to delete.
+                If None, all rule groups on the server will be fetched and deleted.
+                Defaults to None.
+
+        Returns:
+            None
+
+        Raises:
+            ValueError: If any rule_group_id is a title and no matching rule group is found or multiple matches exist.
             requests.HTTPError: If any deletion request fails.
         """
         if rule_group_ids is None:
