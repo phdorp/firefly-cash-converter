@@ -24,6 +24,7 @@ class TestInterfaceBase(unittest.TestCase):
         If an error occurs during clean up data left on server might lead to failure of future test runs.
         """
         self._fireflyInterface.deleteAccounts()
+        self._fireflyInterface.deleteRules()
         self._fireflyInterface.deleteRuleGroups()
         self._fireflyInterface.purgeUserData()
 
@@ -80,112 +81,149 @@ class TestRuleInterface(TestInterfaceBase):
     def setUp(self):
         super().setUp()
 
-        # Create two minimal test rules
-        self._rule1 = data.PostRule(
-            title="Test Rule 1",
-            description="First test rule",
-            trigger="store-journal",
+        # Create a rule group for the test rules
+        test_rule_group = data.PostRuleGroup(
+            title="Test Rule Group",
+            description="Rule group for test rules",
+            order=1,
             active=True,
-            strict=False,
-            stop_processing=False,
-            triggers=[
-                {
-                    "type": "description_is",
-                    "value": "test",
-                    "order": 1,
-                    "active": True,
-                    "prohibited": False,
-                    "stop_processing": False,
-                },
-                {
-                    "type": "amount_more",
-                    "value": "50",
-                    "order": 2,
-                    "active": True,
-                    "prohibited": False,
-                    "stop_processing": False,
-                },
-            ],
-            actions=[
-                {
-                    "type": "set_category",
-                    "value": "Test Category",
-                    "order": 1,
-                    "active": True,
-                    "stop_processing": False,
-                },
-                {
-                    "type": "add_tag",
-                    "value": "test-tag",
-                    "order": 2,
-                    "active": True,
-                    "stop_processing": False,
-                },
-            ],
         )
+        response = self._fireflyInterface.createRuleGroup(test_rule_group)
+        rule_group_id = int(response.json()["data"]["id"])
 
-        self._rule2 = data.PostRule(
-            title="Test Rule 2",
-            description="Second test rule",
-            trigger="store-journal",
-            active=True,
-            strict=False,
-            stop_processing=False,
-            triggers=[
-                {
-                    "type": "amount_more",
-                    "value": "100",
-                    "order": 1,
-                    "active": True,
-                    "prohibited": False,
-                    "stop_processing": False,
-                },
-                {
-                    "type": "source_account_starts",
-                    "value": "Savings",
-                    "order": 2,
-                    "active": True,
-                    "prohibited": False,
-                    "stop_processing": False,
-                },
-            ],
-            actions=[
-                {
-                    "type": "set_budget",
-                    "value": "Test Budget",
-                    "order": 1,
-                    "active": True,
-                    "stop_processing": False,
-                },
-                {
-                    "type": "prepend_description",
-                    "value": "[Large] ",
-                    "order": 2,
-                    "active": True,
-                    "stop_processing": False,
-                },
-            ],
-        )
+        # Create test rules in a list, all assigned to the rule group
+        self._rules = [
+            data.PostRule(
+                title="Test Rule 1",
+                description="First test rule",
+                trigger="store-journal",
+                rule_group_id=rule_group_id,
+                active=True,
+                strict=False,
+                stop_processing=False,
+                triggers=[
+                    {
+                        "type": "description_is",
+                        "value": "test",
+                        "order": 1,
+                        "active": True,
+                        "prohibited": False,
+                        "stop_processing": False,
+                    },
+                    {
+                        "type": "amount_more",
+                        "value": "50",
+                        "order": 2,
+                        "active": True,
+                        "prohibited": False,
+                        "stop_processing": False,
+                    },
+                ],
+                actions=[
+                    {
+                        "type": "set_category",
+                        "value": "Test Category",
+                        "order": 1,
+                        "active": True,
+                        "stop_processing": False,
+                    },
+                    {
+                        "type": "add_tag",
+                        "value": "test-tag",
+                        "order": 2,
+                        "active": True,
+                        "stop_processing": False,
+                    },
+                ],
+            ),
+            data.PostRule(
+                title="Test Rule 2",
+                description="Second test rule",
+                trigger="store-journal",
+                rule_group_id=rule_group_id,
+                active=True,
+                strict=False,
+                stop_processing=False,
+                triggers=[
+                    {
+                        "type": "amount_more",
+                        "value": "100",
+                        "order": 1,
+                        "active": True,
+                        "prohibited": False,
+                        "stop_processing": False,
+                    },
+                    {
+                        "type": "source_account_starts",
+                        "value": "Savings",
+                        "order": 2,
+                        "active": True,
+                        "prohibited": False,
+                        "stop_processing": False,
+                    },
+                ],
+                actions=[
+                    {
+                        "type": "set_category",
+                        "value": "Large Transactions",
+                        "order": 1,
+                        "active": True,
+                        "stop_processing": False,
+                    },
+                    {
+                        "type": "add_tag",
+                        "value": "large-amount",
+                        "order": 2,
+                        "active": True,
+                        "stop_processing": False,
+                    },
+                ],
+            ),
+        ]
 
         # Create the rules on the server
-        self._fireflyInterface.createRule(self._rule1)
-        self._fireflyInterface.createRule(self._rule2)
+        for rule in self._rules:
+            self._fireflyInterface.createRule(rule)
 
-    def testCreateRules(self):
+    def testListRules(self):
         # Retrieve all rules from the server
         server_rules = self._fireflyInterface.getRules()
 
-        # Verify we have at least 2 rules
+        # Verify we have at least the same number of rules as created
         self.assertGreaterEqual(
             len(server_rules),
-            2,
-            "Expected at least 2 rules on the server.",
+            len(self._rules),
+            f"Expected at least {len(self._rules)} rules on the server.",
         )
 
         # Check that our test rules exist on the server
         rule_titles = {rule.title for rule in server_rules}
-        self.assertIn("Test Rule 1", rule_titles, "Test Rule 1 was not found on the server.")
-        self.assertIn("Test Rule 2", rule_titles, "Test Rule 2 was not found on the server.")
+        for rule in self._rules:
+            self.assertIn(
+                rule.title,
+                rule_titles,
+                f"{rule.title} was not found on the server.",
+            )
+
+    def testDeleteRules(self):
+        # Verify rules exist before deletion
+        server_rules_before = self._fireflyInterface.getRules()
+        self.assertGreaterEqual(
+            len(server_rules_before),
+            len(self._rules),
+            "Rules should exist before deletion.",
+        )
+
+        # Delete all rules
+        self._fireflyInterface.deleteRules()
+
+        # Verify all rules were deleted
+        server_rules_after = self._fireflyInterface.getRules()
+        self.assertEqual(
+            len(server_rules_after),
+            0,
+            "Rules were not deleted from the server.",
+        )
 
 
 class TestRuleGroupInterface(TestInterfaceBase):
