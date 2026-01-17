@@ -641,3 +641,36 @@ class PayloadFactory:
             }
         )
         return payload
+
+    def postApplyRuleGroup(
+        self,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        accounts: Optional[list[str]] = None,
+    ) -> dict[str, Any]:
+        """Build a payload for triggering/applying a rule group to transactions.
+
+        Constructs a payload for the POST /v1/rule-groups/{id}/trigger endpoint
+        which applies a rule group to existing transactions.
+
+        Args:
+            start_date (Optional[str]): Start date for transactions to apply rules to (YYYY-MM-DD format). Defaults to None.
+            end_date (Optional[str]): End date for transactions to apply rules to (YYYY-MM-DD format). Defaults to None.
+            accounts (Optional[list[str]]): Array of account IDs to limit rule application to. Defaults to None.
+
+        Returns:
+            dict[str, Any]: API payload for triggering rule group application.
+        """
+        payload: dict[str, Any] = {}
+        payload.update(
+            {
+                key: value
+                for key, value in {
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "accounts": accounts,
+                }.items()
+                if value is not None
+            }
+        )
+        return payload

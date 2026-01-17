@@ -467,6 +467,38 @@ class FireflyInterface:
         logger.debug(f"Rule group {ruleGroup.title} created successfully (status: {response.status_code})")
         return response
 
+    def applyRuleGroup(
+        self,
+        rule_group_id: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        accounts: Optional[List[str]] = None,
+    ) -> requests.Response:
+        """Trigger/apply a rule group to existing transactions on the Firefly III server.
+
+        Posts a request to the trigger endpoint to apply a rule group's rules to
+        existing transactions, optionally filtered by date range and accounts.
+
+        Args:
+            rule_group_id (str): The Firefly rule group ID to trigger.
+            start_date (Optional[str]): Start date for transactions to apply rules to (YYYY-MM-DD format). Defaults to None.
+            end_date (Optional[str]): End date for transactions to apply rules to (YYYY-MM-DD format). Defaults to None.
+            accounts (Optional[List[str]]): Array of account IDs to limit rule application to. Defaults to None.
+
+        Returns:
+            requests.Response: The HTTP response from the Firefly API.
+
+        Raises:
+            requests.HTTPError: If the HTTP request fails.
+        """
+        logger.info(f"Triggering rule group: {rule_group_id}")
+        url = f"{self._api_url}/rule-groups/{rule_group_id}/trigger"
+        payload = self._payloadFactory.postApplyRuleGroup(start_date, end_date, accounts)
+        response = self._session.post(url, json=payload)
+        response.raise_for_status()
+        logger.debug(f"Rule group {rule_group_id} triggered successfully (status: {response.status_code})")
+        return response
+
     def deleteRuleGroup(self, rule_group_id: str) -> requests.Response:
         """Delete a rule group on the Firefly III server.
 
