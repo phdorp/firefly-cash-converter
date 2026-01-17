@@ -313,6 +313,36 @@ class TestRuleGroupInterface(TestInterfaceBase):
             "Rule groups were not deleted from the server.",
         )
 
+    def testApplyRuleGroup(self):
+        # Retrieve rule groups from the server to get an ID
+        server_rule_groups = self._fireflyInterface.getRuleGroups()
+        self.assertGreater(
+            len(server_rule_groups),
+            0,
+            "At least one rule group should exist on the server.",
+        )
+
+        # Get the ID of the first rule group
+        rule_group_id = int(server_rule_groups[0].id)
+
+        # Create two rules and add them to the rule group
+        test_rules = create_test_rules(rule_group_id, "Apply Test")
+
+        # Create the rules on the server
+        for rule in test_rules:
+            self._fireflyInterface.createRule(rule)
+
+        # Apply the rule group (should not raise an exception even without transactions)
+        try:
+            response = self._fireflyInterface.applyRuleGroup(str(rule_group_id))
+            self.assertEqual(
+                response.status_code,
+                204,
+                f"Expected status code 204, got {response.status_code}",
+            )
+        except Exception as e:
+            self.fail(f"Applying rule group raised an exception: {e}")
+
 
 if __name__ == "__main__":
     unittest.main()
