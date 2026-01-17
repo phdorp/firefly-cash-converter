@@ -24,6 +24,7 @@ class TestInterfaceBase(unittest.TestCase):
         If an error occurs during clean up data left on server might lead to failure of future test runs.
         """
         self._fireflyInterface.deleteAccounts()
+        self._fireflyInterface.deleteRuleGroups()
         self._fireflyInterface.purgeUserData()
 
     def _getAccountNames(self) -> Set[str]:
@@ -185,6 +186,71 @@ class TestRuleInterface(TestInterfaceBase):
         rule_titles = {rule.title for rule in server_rules}
         self.assertIn("Test Rule 1", rule_titles, "Test Rule 1 was not found on the server.")
         self.assertIn("Test Rule 2", rule_titles, "Test Rule 2 was not found on the server.")
+
+
+class TestRuleGroupInterface(TestInterfaceBase):
+    def setUp(self):
+        super().setUp()
+
+        # Create test rule groups in a list
+        self._ruleGroups = [
+            data.PostRuleGroup(
+                title="Test Rule Group 1",
+                description="First test rule group",
+                order=1,
+                active=True,
+            ),
+            data.PostRuleGroup(
+                title="Test Rule Group 2",
+                description="Second test rule group",
+                order=2,
+                active=True,
+            ),
+        ]
+
+        # Create the rule groups on the server
+        for ruleGroup in self._ruleGroups:
+            self._fireflyInterface.createRuleGroup(ruleGroup)
+
+    def testGetRuleGroups(self):
+        # Retrieve all rule groups from the server
+        server_rule_groups = self._fireflyInterface.getRuleGroups()
+
+        # Verify we have at least the same number of rule groups as created
+        self.assertGreaterEqual(
+            len(server_rule_groups),
+            len(self._ruleGroups),
+            f"Expected at least {len(self._ruleGroups)} rule groups on the server.",
+        )
+
+        # Check that our test rule groups exist on the server
+        rule_group_titles = {rule_group.title for rule_group in server_rule_groups}
+        for ruleGroup in self._ruleGroups:
+            self.assertIn(
+                ruleGroup.title,
+                rule_group_titles,
+                f"{ruleGroup.title} was not found on the server.",
+            )
+
+    def testDeleteRuleGroups(self):
+        # Verify rule groups exist before deletion
+        server_rule_groups_before = self._fireflyInterface.getRuleGroups()
+        self.assertGreaterEqual(
+            len(server_rule_groups_before),
+            len(self._ruleGroups),
+            "Rule groups should exist before deletion.",
+        )
+
+        # Delete all rule groups
+        self._fireflyInterface.deleteRuleGroups()
+
+        # Verify all rule groups were deleted
+        server_rule_groups_after = self._fireflyInterface.getRuleGroups()
+        self.assertEqual(
+            len(server_rule_groups_after),
+            0,
+            "Rule groups were not deleted from the server.",
+        )
 
 
 if __name__ == "__main__":
