@@ -597,3 +597,57 @@ class PostRule(BaseRule):
     stop_processing: bool | None = None
     triggers: list | None = None
     actions: list | None = None
+
+
+@dc.dataclass
+class BaseRuleGroup:
+    """Base rule group data class for Firefly III rule groups.
+
+    Attributes:
+        title (str): Rule group title.
+        description (str | None): Rule group description. Defaults to None.
+        order (int | None): Rule group execution order. Defaults to None.
+        active (bool | None): Whether rule group is active. Defaults to None.
+    """
+
+    title: str
+    description: str | None
+    order: int | None
+    active: bool | None
+
+
+@dc.dataclass
+class GetRuleGroup(BaseRuleGroup):
+    """Rule group data class for retrieving rule group information from Firefly III.
+
+    Extends BaseRuleGroup with additional fields returned from the API including
+    rule group metadata and timestamps.
+
+    Attributes:
+        id (int): Rule group identifier.
+        created_at (str): Rule group creation timestamp.
+        updated_at (str): Last update timestamp.
+    """
+
+    id: int
+    created_at: str
+    updated_at: str
+
+
+@dc.dataclass
+class PostRuleGroup(BaseRuleGroup):
+    """Rule group data class for posting rule groups to Firefly III.
+
+    Extends BaseRuleGroup with default values optimized for API submission.
+    All optional fields default to None.
+
+    Attributes:
+        title (str): Rule group title.
+        description (str | None): Rule group description. Defaults to None.
+        order (int | None): Rule group execution order. Defaults to None.
+        active (bool | None): Whether rule group is active. Defaults to None.
+    """
+
+    description: str | None = None
+    order: int | None = None
+    active: bool | None = None
