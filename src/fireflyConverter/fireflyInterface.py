@@ -420,3 +420,49 @@ class FireflyInterface:
         response.raise_for_status()
         logger.debug(f"Rule group {ruleGroup.title} created successfully (status: {response.status_code})")
         return response
+
+    def deleteRuleGroup(self, rule_group_id: str) -> requests.Response:
+        """Delete a rule group on the Firefly III server.
+
+        Args:
+            rule_group_id (str): The Firefly rule group ID to delete.
+
+        Returns:
+            requests.Response: The HTTP response from the Firefly API.
+
+        Raises:
+            requests.HTTPError: If the HTTP request fails.
+        """
+        logger.info(f"Deleting rule group: {rule_group_id}")
+        url = f"{self._api_url}/rule-groups/{rule_group_id}"
+        resp = self._session.delete(url)
+        resp.raise_for_status()
+        logger.debug(f"Rule group {rule_group_id} deleted successfully")
+        return resp
+
+    def deleteRuleGroups(self, rule_group_ids: Optional[List[str]] = None) -> None:
+        """Delete one or more rule groups from the Firefly III server.
+
+        If no rule group IDs are provided, fetches all rule groups from the server and deletes them.
+        Otherwise, deletes only the specified rule groups.
+
+        Args:
+            rule_group_ids (Optional[List[str]]): List of Firefly rule group IDs to delete.
+                If None, all rule groups on the server will be fetched and deleted.
+                Defaults to None.
+
+        Returns:
+            None
+
+        Raises:
+            requests.HTTPError: If any deletion request fails.
+        """
+        if rule_group_ids is None:
+            logger.info("No rule group IDs provided, fetching all rule groups for deletion")
+            rule_groups = self.getRuleGroups()
+            rule_group_ids = [str(rule_group.id) for rule_group in rule_groups]
+
+        logger.info(f"Deleting {len(rule_group_ids)} rule groups from Firefly III")
+        for rule_group_id in rule_group_ids:
+            self.deleteRuleGroup(rule_group_id)
+        logger.info(f"Successfully deleted all {len(rule_group_ids)} rule groups")
