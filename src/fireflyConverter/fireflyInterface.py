@@ -314,3 +314,56 @@ class FireflyInterface:
                 split["user"] = split.get("user")
                 transactions.append(data.GetTransaction(**split))
         return transactions
+
+    def getRules(
+        self,
+        limit: int = 100,
+        page: int = 1,
+    ) -> List[data.GetRule]:
+        """Retrieve the list of rules from the Firefly III server.
+
+        Fetches rules from the Firefly III instance with optional pagination.
+        Converts the API response data into GetRule objects.
+
+        Args:
+            limit (int): Number of items per page. Defaults to 100.
+            page (int): Page number for pagination. Defaults to 1.
+
+        Returns:
+            List[data.GetRule]: List of rule objects with their attributes and metadata.
+
+        Raises:
+            requests.HTTPError: If the HTTP request fails.
+        """
+        url = f"{self._api_url}/rules"
+        params = self._payloadFactory.getRules(limit, page)
+        response = self._session.get(url, params=params)
+        response.raise_for_status()
+        ruleResponses: Dict = response.json().get("data", [])
+
+        rules: List[data.GetRule] = []
+        for response in ruleResponses:
+            ruleData = response.get("attributes", {})
+            ruleData["id"] = response.get("id")
+            rules.append(data.GetRule(**ruleData))
+        return rules
+
+    def createRule(self, rule: data.PostRule) -> requests.Response:
+        """Create a new rule on the Firefly III server.
+
+        Args:
+            rule (data.PostRule): The rule object to create.
+
+        Returns:
+            requests.Response: The HTTP response from the Firefly API.
+
+        Raises:
+            requests.HTTPError: If the HTTP request fails.
+        """
+        logger.info(f"Creating rule: {rule.title}")
+        url = f"{self._api_url}/rules"
+        payload = self._payloadFactory.toPayload(rule)
+        response = self._session.post(url, json=payload)
+        response.raise_for_status()
+        logger.debug(f"Rule {rule.title} created successfully (status: {response.status_code})")
+        return response
