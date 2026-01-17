@@ -469,7 +469,7 @@ class FireflyInterface:
 
     def applyRuleGroup(
         self,
-        rule_group_id: str,
+        rule_group_id: int,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         accounts: Optional[List[str]] = None,
@@ -480,7 +480,7 @@ class FireflyInterface:
         existing transactions, optionally filtered by date range and accounts.
 
         Args:
-            rule_group_id (str): The Firefly rule group ID to trigger.
+            rule_group_id (int): The Firefly rule group ID to trigger.
             start_date (Optional[str]): Start date for transactions to apply rules to (YYYY-MM-DD format). Defaults to None.
             end_date (Optional[str]): End date for transactions to apply rules to (YYYY-MM-DD format). Defaults to None.
             accounts (Optional[List[str]]): Array of account IDs to limit rule application to. Defaults to None.
@@ -499,11 +499,11 @@ class FireflyInterface:
         logger.debug(f"Rule group {rule_group_id} triggered successfully (status: {response.status_code})")
         return response
 
-    def deleteRuleGroup(self, rule_group_id: str) -> requests.Response:
+    def deleteRuleGroup(self, rule_group_id: int) -> requests.Response:
         """Delete a rule group on the Firefly III server.
 
         Args:
-            rule_group_id (str): The Firefly rule group ID to delete.
+            rule_group_id (int): The Firefly rule group ID to delete.
 
         Returns:
             requests.Response: The HTTP response from the Firefly API.
@@ -518,14 +518,14 @@ class FireflyInterface:
         logger.debug(f"Rule group {rule_group_id} deleted successfully")
         return resp
 
-    def deleteRuleGroups(self, rule_group_ids: Optional[List[str]] = None) -> None:
+    def deleteRuleGroups(self, rule_group_ids: Optional[List[int]] = None) -> None:
         """Delete one or more rule groups from the Firefly III server.
 
         If no rule group IDs are provided, fetches all rule groups from the server and deletes them.
         Otherwise, deletes only the specified rule groups.
 
         Args:
-            rule_group_ids (Optional[List[str]]): List of Firefly rule group IDs to delete.
+            rule_group_ids (Optional[List[int]]): List of Firefly rule group IDs to delete.
                 If None, all rule groups on the server will be fetched and deleted.
                 Defaults to None.
 
@@ -538,7 +538,7 @@ class FireflyInterface:
         if rule_group_ids is None:
             logger.info("No rule group IDs provided, fetching all rule groups for deletion")
             rule_groups = self.getRuleGroups()
-            rule_group_ids = [str(rule_group.id) for rule_group in rule_groups]
+            rule_group_ids = [rule_group.id for rule_group in rule_groups]
 
         logger.info(f"Deleting {len(rule_group_ids)} rule groups from Firefly III")
         for rule_group_id in rule_group_ids:

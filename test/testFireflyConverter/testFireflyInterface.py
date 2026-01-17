@@ -334,7 +334,7 @@ class TestRuleGroupInterface(TestInterfaceBase):
 
         # Apply the rule group (should not raise an exception even without transactions)
         try:
-            response = self._fireflyInterface.applyRuleGroup(str(rule_group_id))
+            response = self._fireflyInterface.applyRuleGroup(rule_group_id)
             self.assertEqual(
                 response.status_code,
                 204,
