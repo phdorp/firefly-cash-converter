@@ -348,6 +348,39 @@ class FireflyInterface:
             rules.append(data.GetRule(**ruleData))
         return rules
 
+    def getRuleGroups(
+        self,
+        limit: int = 100,
+        page: int = 1,
+    ) -> List[data.GetRuleGroup]:
+        """Retrieve the list of rule groups from the Firefly III server.
+
+        Fetches rule groups from the Firefly III instance with optional pagination.
+        Converts the API response data into GetRuleGroup objects.
+
+        Args:
+            limit (int): Number of items per page. Defaults to 100.
+            page (int): Page number for pagination. Defaults to 1.
+
+        Returns:
+            List[data.GetRuleGroup]: List of rule group objects with their attributes and metadata.
+
+        Raises:
+            requests.HTTPError: If the HTTP request fails.
+        """
+        url = f"{self._api_url}/rule-groups"
+        params = self._payloadFactory.getRuleGroups(limit, page)
+        response = self._session.get(url, params=params)
+        response.raise_for_status()
+        ruleGroupResponses: Dict = response.json().get("data", [])
+
+        ruleGroups: List[data.GetRuleGroup] = []
+        for response in ruleGroupResponses:
+            ruleGroupData = response.get("attributes", {})
+            ruleGroupData["id"] = response.get("id")
+            ruleGroups.append(data.GetRuleGroup(**ruleGroupData))
+        return ruleGroups
+
     def createRule(self, rule: data.PostRule) -> requests.Response:
         """Create a new rule on the Firefly III server.
 
@@ -366,4 +399,24 @@ class FireflyInterface:
         response = self._session.post(url, json=payload)
         response.raise_for_status()
         logger.debug(f"Rule {rule.title} created successfully (status: {response.status_code})")
+        return response
+
+    def createRuleGroup(self, ruleGroup: data.PostRuleGroup) -> requests.Response:
+        """Create a new rule group on the Firefly III server.
+
+        Args:
+            ruleGroup (data.PostRuleGroup): The rule group object to create.
+
+        Returns:
+            requests.Response: The HTTP response from the Firefly API.
+
+        Raises:
+            requests.HTTPError: If the HTTP request fails.
+        """
+        logger.info(f"Creating rule group: {ruleGroup.title}")
+        url = f"{self._api_url}/rule-groups"
+        payload = self._payloadFactory.toPayload(ruleGroup)
+        response = self._session.post(url, json=payload)
+        response.raise_for_status()
+        logger.debug(f"Rule group {ruleGroup.title} created successfully (status: {response.status_code})")
         return response
