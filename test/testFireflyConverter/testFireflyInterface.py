@@ -75,5 +75,117 @@ class TestTransactionInterface(TestInterfaceBase):
         )
 
 
+class TestRuleInterface(TestInterfaceBase):
+    def setUp(self):
+        super().setUp()
+
+        # Create two minimal test rules
+        self._rule1 = data.PostRule(
+            title="Test Rule 1",
+            description="First test rule",
+            trigger="store-journal",
+            active=True,
+            strict=False,
+            stop_processing=False,
+            triggers=[
+                {
+                    "type": "description_is",
+                    "value": "test",
+                    "order": 1,
+                    "active": True,
+                    "prohibited": False,
+                    "stop_processing": False,
+                },
+                {
+                    "type": "amount_more",
+                    "value": "50",
+                    "order": 2,
+                    "active": True,
+                    "prohibited": False,
+                    "stop_processing": False,
+                },
+            ],
+            actions=[
+                {
+                    "type": "set_category",
+                    "value": "Test Category",
+                    "order": 1,
+                    "active": True,
+                    "stop_processing": False,
+                },
+                {
+                    "type": "add_tag",
+                    "value": "test-tag",
+                    "order": 2,
+                    "active": True,
+                    "stop_processing": False,
+                },
+            ],
+        )
+
+        self._rule2 = data.PostRule(
+            title="Test Rule 2",
+            description="Second test rule",
+            trigger="store-journal",
+            active=True,
+            strict=False,
+            stop_processing=False,
+            triggers=[
+                {
+                    "type": "amount_more",
+                    "value": "100",
+                    "order": 1,
+                    "active": True,
+                    "prohibited": False,
+                    "stop_processing": False,
+                },
+                {
+                    "type": "source_account_starts",
+                    "value": "Savings",
+                    "order": 2,
+                    "active": True,
+                    "prohibited": False,
+                    "stop_processing": False,
+                },
+            ],
+            actions=[
+                {
+                    "type": "set_budget",
+                    "value": "Test Budget",
+                    "order": 1,
+                    "active": True,
+                    "stop_processing": False,
+                },
+                {
+                    "type": "prepend_description",
+                    "value": "[Large] ",
+                    "order": 2,
+                    "active": True,
+                    "stop_processing": False,
+                },
+            ],
+        )
+
+        # Create the rules on the server
+        self._fireflyInterface.createRule(self._rule1)
+        self._fireflyInterface.createRule(self._rule2)
+
+    def testCreateRules(self):
+        # Retrieve all rules from the server
+        server_rules = self._fireflyInterface.getRules()
+
+        # Verify we have at least 2 rules
+        self.assertGreaterEqual(
+            len(server_rules),
+            2,
+            "Expected at least 2 rules on the server.",
+        )
+
+        # Check that our test rules exist on the server
+        rule_titles = {rule.title for rule in server_rules}
+        self.assertIn("Test Rule 1", rule_titles, "Test Rule 1 was not found on the server.")
+        self.assertIn("Test Rule 2", rule_titles, "Test Rule 2 was not found on the server.")
+
+
 if __name__ == "__main__":
     unittest.main()

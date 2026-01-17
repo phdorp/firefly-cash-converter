@@ -536,8 +536,8 @@ class BaseRule:
     """
 
     title: str
+    rule_group_id: int
     description: str | None
-    rule_group_id: int | None
     rule_group_title: str | None
     order: int | None
     trigger: str | None
@@ -587,4 +587,13 @@ class PostRule(BaseRule):
         actions (list | None): List of rule actions to execute. Defaults to None.
     """
 
-    pass
+    rule_group_id: int = 1
+    description: str | None = None
+    rule_group_title: str | None = None
+    order: int | None = None
+    trigger: str | None = None
+    active: bool | None = None
+    strict: bool | None = None
+    stop_processing: bool | None = None
+    triggers: list | None = None
+    actions: list | None = None
