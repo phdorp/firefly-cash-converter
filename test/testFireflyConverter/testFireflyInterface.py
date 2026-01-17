@@ -322,17 +322,12 @@ class TestRuleGroupInterface(TestInterfaceBase):
             "At least one rule group should exist on the server.",
         )
 
-        # Get the ID of the first rule group
         rule_group_id = int(server_rule_groups[0].id)
 
-        # Create two rules and add them to the rule group
-        test_rules = create_test_rules(rule_group_id, "Apply Test")
-
-        # Create the rules on the server
-        for rule in test_rules:
+        for rule in create_test_rules(rule_group_id, "Apply Test"):
             self._fireflyInterface.createRule(rule)
 
-        # Apply the rule group (should not raise an exception even without transactions)
+        # Test 1: Apply the rule group by ID (should not raise an exception even without transactions)
         try:
             response = self._fireflyInterface.applyRuleGroup(rule_group_id)
             self.assertEqual(
@@ -341,7 +336,28 @@ class TestRuleGroupInterface(TestInterfaceBase):
                 f"Expected status code 204, got {response.status_code}",
             )
         except Exception as e:
-            self.fail(f"Applying rule group raised an exception: {e}")
+            self.fail(f"Applying rule group by ID raised an exception: {e}")
+
+        # Test 2: Apply the rule group by title
+        rule_group_title = server_rule_groups[0].title
+        try:
+            response = self._fireflyInterface.applyRuleGroup(rule_group_title)
+            self.assertEqual(
+                response.status_code,
+                204,
+                f"Expected status code 204 when applying by title, got {response.status_code}",
+            )
+        except Exception as e:
+            self.fail(f"Applying rule group by title raised an exception: {e}")
+
+        # Test 3: Test error handling for non-existent title
+        with self.assertRaises(ValueError) as context:
+            self._fireflyInterface.applyRuleGroup("Non-Existent Rule Group")
+        self.assertIn(
+            "No rule group found with title",
+            str(context.exception),
+            "Expected error message about missing rule group title",
+        )
 
 
 if __name__ == "__main__":
