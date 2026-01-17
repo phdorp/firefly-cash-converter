@@ -5,7 +5,7 @@ from argparse import ArgumentParser
 
 from fireflyConverter import cli, data
 from fireflyConverter import fireflyInterface as ffi
-from test.testFireflyConverter.testFireflyInterface import create_test_rules
+from .testFireflyInterface import create_test_rules
 
 
 class TestTransferCli(unittest.TestCase):
