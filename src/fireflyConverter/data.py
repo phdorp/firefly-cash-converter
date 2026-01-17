@@ -515,3 +515,76 @@ class PostExpenseAccount(PostAccount):
     def __post_init__(self):
         # Lock down immutable account type for expense accounts
         object.__setattr__(self, "type", "expense")
+
+
+@dc.dataclass
+class BaseRule:
+    """Base rule data class for Firefly III rules.
+
+    Attributes:
+        title (str): Rule title.
+        description (str | None): Rule description. Defaults to None.
+        rule_group_id (int | None): Associated rule group ID. Defaults to None.
+        rule_group_title (str | None): Associated rule group title. Defaults to None.
+        order (int | None): Rule execution order. Defaults to None.
+        trigger (str | None): Rule trigger type (e.g., 'store-journal', 'update-journal'). Defaults to None.
+        active (bool | None): Whether rule is active. Defaults to None.
+        strict (bool | None): Whether rule uses strict matching. Defaults to None.
+        stop_processing (bool | None): Whether to stop processing rules after this one. Defaults to None.
+        triggers (list | None): List of rule triggers with conditions. Defaults to None.
+        actions (list | None): List of rule actions to execute. Defaults to None.
+    """
+
+    title: str
+    description: str | None
+    rule_group_id: int | None
+    rule_group_title: str | None
+    order: int | None
+    trigger: str | None
+    active: bool | None
+    strict: bool | None
+    stop_processing: bool | None
+    triggers: list | None
+    actions: list | None
+
+
+@dc.dataclass
+class GetRule(BaseRule):
+    """Rule data class for retrieving rule information from Firefly III.
+
+    Extends BaseRule with additional fields returned from the API including
+    rule metadata and timestamps.
+
+    Attributes:
+        id (int): Rule identifier.
+        created_at (str | None): Rule creation timestamp.
+        updated_at (str | None): Last update timestamp.
+    """
+
+    id: int
+    created_at: str
+    updated_at: str
+
+
+@dc.dataclass
+class PostRule(BaseRule):
+    """Rule data class for posting rules to Firefly III.
+
+    Extends BaseRule with default values optimized for API submission.
+    All optional fields default to None.
+
+    Attributes:
+        title (str): Rule title.
+        description (str | None): Rule description. Defaults to None.
+        rule_group_id (int | None): Associated rule group ID. Defaults to None.
+        rule_group_title (str | None): Associated rule group title. Defaults to None.
+        order (int | None): Rule execution order. Defaults to None.
+        trigger (str | None): Rule trigger type. Defaults to None.
+        active (bool | None): Whether rule is active. Defaults to None.
+        strict (bool | None): Whether rule uses strict matching. Defaults to None.
+        stop_processing (bool | None): Whether to stop processing rules after this one. Defaults to None.
+        triggers (list | None): List of rule triggers with conditions. Defaults to None.
+        actions (list | None): List of rule actions to execute. Defaults to None.
+    """
+
+    pass
