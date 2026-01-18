@@ -344,7 +344,7 @@ class FireflyInterface:
         rules: List[data.GetRule] = []
         for response in ruleResponses:
             ruleData = response.get("attributes", {})
-            ruleData["id"] = response.get("id")
+            ruleData["id"] = int(response.get("id"))
             rules.append(data.GetRule(**ruleData))
         return rules
 
