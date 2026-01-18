@@ -189,7 +189,7 @@ def transfer(arguments: Namespace):
         logger.info(f"Applying rule groups: {arguments.apply_rule_groups}")
         for rule_group_title in arguments.apply_rule_groups:
             response = interface.applyRuleGroup(rule_group_title)
-            if response.status_code == 200:
+            if response.status_code == 204:
                 logger.info(f"Rule group '{rule_group_title}' applied successfully.")
             else:
                 logger.warning(f"Failed to apply rule group '{rule_group_title}'. Status code: {response.status_code}")
