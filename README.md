@@ -92,6 +92,7 @@ cash transfer <source> [options]
 - `--input_directory`: Directory containing input files (default: `tmp`)
 - `--input_name`: Name of the input file (defaults to source name)
 - `--filter_query`: Optional pandas query to filter transactions (see [Filter Queries](#filter-queries))
+- `--apply_rule_groups`: List of rule group titles to apply after transferring transactions.
 
 **Example with manual file:**
 

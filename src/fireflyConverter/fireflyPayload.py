@@ -1,6 +1,6 @@
 from typing import Any, Optional, Union, overload
 
-from fireflyConverter.data import BaseTransaction, PostAccount
+from fireflyConverter.data import BaseTransaction, PostAccount, PostRule, PostRuleGroup
 
 
 class PayloadFactory:
@@ -29,25 +29,37 @@ class PayloadFactory:
     def toPayload(self, data: PostAccount) -> dict[str, Any]:
         """Convert a PostAccount to a payload dictionary."""
 
-    def toPayload(self, data: Union[BaseTransaction, PostAccount]) -> dict[str, Any]:
-        """Convert transaction or account data to a payload dictionary.
+    @overload
+    def toPayload(self, data: PostRule) -> dict[str, Any]:
+        """Convert a PostRule to a payload dictionary."""
+
+    @overload
+    def toPayload(self, data: PostRuleGroup) -> dict[str, Any]:
+        """Convert a PostRuleGroup to a payload dictionary."""
+
+    def toPayload(self, data: Union[BaseTransaction, PostAccount, PostRule, PostRuleGroup]) -> dict[str, Any]:
+        """Convert transaction, account, rule, or rule group data to a payload dictionary.
 
         Routes the conversion based on the input data type to the appropriate
         internal conversion method.
 
         Args:
-            data (Union[BaseTransaction, PostAccount]): The data object to convert.
+            data (Union[BaseTransaction, PostAccount, PostRule, PostRuleGroup]): The data object to convert.
 
         Returns:
             dict[str, Any]: API-compatible payload dictionary.
 
         Raises:
-            TypeError: If data is not a BaseTransaction or PostAccount.
+            TypeError: If data is not a BaseTransaction, PostAccount, PostRule, or PostRuleGroup.
         """
         if isinstance(data, PostAccount):
             return self._toAccountPayload(data)
         elif isinstance(data, BaseTransaction):
             return self._toTransactionPayload(data)
+        elif isinstance(data, PostRule):
+            return self._toRulePayload(data)
+        elif isinstance(data, PostRuleGroup):
+            return self._toRuleGroupPayload(data)
         else:
             raise TypeError(f"Unsupported data type for payload conversion: {type(data)}")
 
@@ -72,6 +84,26 @@ class PayloadFactory:
             dict[str, Any]: Account payload dictionary.
         """
         return self.postAccount(**account.__dict__)
+
+    def _toRulePayload(self, rule: PostRule) -> dict[str, Any]:
+        """Convert a PostRule to a rule payload.
+
+        Args:
+            rule (PostRule): The rule to convert.
+        Returns:
+            dict[str, Any]: Rule payload dictionary.
+        """
+        return self.postRule(**rule.__dict__)
+
+    def _toRuleGroupPayload(self, rule_group: PostRuleGroup) -> dict[str, Any]:
+        """Convert a PostRuleGroup to a rule group payload.
+
+        Args:
+            rule_group (PostRuleGroup): The rule group to convert.
+        Returns:
+            dict[str, Any]: Rule group payload dictionary.
+        """
+        return self.postRuleGroup(**rule_group.__dict__)
 
     def postTransaction(
         self,
@@ -478,3 +510,167 @@ class PayloadFactory:
             params["type"] = type
 
         return params
+
+    def getRules(
+        self,
+        limit: int = 100,
+        page: int = 1,
+    ) -> dict[str, Any]:
+        """Build query parameters for listing rules.
+
+        Constructs parameters for a GET request to the Firefly III rules endpoint
+        (/v1/rules). Only non-None parameters are included.
+
+        Args:
+            limit (int): Number of items per page. The default pagination is per 50 items. Defaults to 100.
+            page (int): Page number. The default pagination is per 50 items. Defaults to 1.
+
+        Returns:
+            dict[str, Any]: Query parameters dictionary.
+        """
+        return {"limit": limit, "page": page}
+
+    def getRuleGroups(
+        self,
+        limit: int = 100,
+        page: int = 1,
+    ) -> dict[str, Any]:
+        """Build query parameters for listing rule groups.
+
+        Constructs parameters for a GET request to the Firefly III rule groups endpoint
+        (/v1/rule-groups). Only non-None parameters are included.
+
+        Args:
+            limit (int): Number of items per page. The default pagination is per 50 items. Defaults to 100.
+            page (int): Page number. The default pagination is per 50 items. Defaults to 1.
+
+        Returns:
+            dict[str, Any]: Query parameters dictionary.
+        """
+        return {"limit": limit, "page": page}
+
+    def postRule(
+        self,
+        title: str,
+        description: Optional[str] = None,
+        rule_group_id: Optional[int] = None,
+        rule_group_title: Optional[str] = None,
+        order: Optional[int] = None,
+        trigger: Optional[str] = None,
+        active: Optional[bool] = None,
+        strict: Optional[bool] = None,
+        stop_processing: Optional[bool] = None,
+        triggers: Optional[list] = None,
+        actions: Optional[list] = None,
+    ) -> dict[str, Any]:
+        """Build a rule payload for the Firefly III API.
+
+        Constructs a complete API request payload for creating a rule, including
+        triggers and actions. Returns a dictionary with the rule object.
+
+        Args:
+            title (str): Rule title.
+            description (Optional[str]): Rule description. Defaults to None.
+            rule_group_id (Optional[int]): Associated rule group ID. Defaults to None.
+            rule_group_title (Optional[str]): Associated rule group title. Defaults to None.
+            order (Optional[int]): Rule execution order. Defaults to None.
+            trigger (Optional[str]): Rule trigger type (e.g., 'store-journal', 'update-journal'). Defaults to None.
+            active (Optional[bool]): Whether rule is active. Defaults to None.
+            strict (Optional[bool]): Whether rule uses strict matching. Defaults to None.
+            stop_processing (Optional[bool]): Whether to stop processing rules after this one. Defaults to None.
+            triggers (Optional[list]): List of rule triggers with conditions. Each trigger should be a dict
+                with 'type', 'value', 'order', 'active', 'prohibited', and 'stop_processing' keys. Defaults to None.
+            actions (Optional[list]): List of rule actions to execute. Each action should be a dict
+                with 'type', 'value', 'order', 'active', and 'stop_processing' keys. Defaults to None.
+
+        Returns:
+            dict[str, Any]: API payload with rule data.
+        """
+        payload: dict[str, Any] = {"title": title}
+        payload.update(
+            {
+                key: value
+                for key, value in {
+                    "description": description,
+                    "rule_group_id": rule_group_id,
+                    "rule_group_title": rule_group_title,
+                    "order": order,
+                    "trigger": trigger,
+                    "active": active,
+                    "strict": strict,
+                    "stop_processing": stop_processing,
+                    "triggers": triggers,
+                    "actions": actions,
+                }.items()
+                if value is not None
+            }
+        )
+        return payload
+
+    def postRuleGroup(
+        self,
+        title: str,
+        description: Optional[str] = None,
+        order: Optional[int] = None,
+        active: Optional[bool] = None,
+    ) -> dict[str, Any]:
+        """Build a rule group payload for the Firefly III API.
+
+        Constructs a complete API request payload for creating a rule group.
+        Returns a dictionary with the rule group object.
+
+        Args:
+            title (str): Rule group title.
+            description (Optional[str]): Rule group description. Defaults to None.
+            order (Optional[int]): Rule group execution order. Defaults to None.
+            active (Optional[bool]): Whether rule group is active. Defaults to None.
+
+        Returns:
+            dict[str, Any]: API payload with rule group data.
+        """
+        payload: dict[str, Any] = {"title": title}
+        payload.update(
+            {
+                key: value
+                for key, value in {
+                    "description": description,
+                    "order": order,
+                    "active": active,
+                }.items()
+                if value is not None
+            }
+        )
+        return payload
+
+    def postApplyRuleGroup(
+        self,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        accounts: Optional[list[str]] = None,
+    ) -> dict[str, Any]:
+        """Build a payload for triggering/applying a rule group to transactions.
+
+        Constructs a payload for the POST /v1/rule-groups/{id}/trigger endpoint
+        which applies a rule group to existing transactions.
+
+        Args:
+            start_date (Optional[str]): Start date for transactions to apply rules to (YYYY-MM-DD format). Defaults to None.
+            end_date (Optional[str]): End date for transactions to apply rules to (YYYY-MM-DD format). Defaults to None.
+            accounts (Optional[list[str]]): Array of account IDs to limit rule application to. Defaults to None.
+
+        Returns:
+            dict[str, Any]: API payload for triggering rule group application.
+        """
+        payload: dict[str, Any] = {}
+        payload.update(
+            {
+                key: value
+                for key, value in {
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "accounts": accounts,
+                }.items()
+                if value is not None
+            }
+        )
+        return payload
