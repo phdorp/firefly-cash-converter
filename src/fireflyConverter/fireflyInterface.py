@@ -374,12 +374,12 @@ class FireflyInterface:
         response.raise_for_status()
         ruleGroupResponses: Dict = response.json().get("data", [])
 
-        ruleGroups: List[data.GetRuleGroup] = []
+        rule_groups: List[data.GetRuleGroup] = []
         for response in ruleGroupResponses:
             ruleGroupData = response.get("attributes", {})
             ruleGroupData["id"] = int(response.get("id"))
-            ruleGroups.append(data.GetRuleGroup(**ruleGroupData))
-        return ruleGroups
+            rule_groups.append(data.GetRuleGroup(**ruleGroupData))
+        return rule_groups
 
     def createRule(self, rule: data.PostRule) -> requests.Response:
         """Create a new rule on the Firefly III server.
@@ -447,24 +447,23 @@ class FireflyInterface:
             self.deleteRule(rule_id)
         logger.info(f"Successfully deleted all {len(rule_ids)} rules")
 
-    def createRuleGroup(self, ruleGroup: data.PostRuleGroup) -> requests.Response:
+    def createRuleGroup(self, rule_group: data.PostRuleGroup) -> requests.Response:
         """Create a new rule group on the Firefly III server.
 
         Args:
-            ruleGroup (data.PostRuleGroup): The rule group object to create.
-
+            rule_group (data.PostRuleGroup): The rule group object to create.
         Returns:
             requests.Response: The HTTP response from the Firefly API.
 
         Raises:
             requests.HTTPError: If the HTTP request fails.
         """
-        logger.info(f"Creating rule group: {ruleGroup.title}")
+        logger.info(f"Creating rule group: {rule_group.title}")
         url = f"{self._api_url}/rule-groups"
-        payload = self._payloadFactory.toPayload(ruleGroup)
+        payload = self._payloadFactory.toPayload(rule_group)
         response = self._session.post(url, json=payload)
         response.raise_for_status()
-        logger.debug(f"Rule group {ruleGroup.title} created successfully (status: {response.status_code})")
+        logger.debug(f"Rule group {rule_group.title} created successfully (status: {response.status_code})")
         return response
 
     @overload

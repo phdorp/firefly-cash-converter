@@ -270,8 +270,8 @@ class TestRuleGroupInterface(TestInterfaceBase):
         ]
 
         # Create the rule groups on the server
-        for ruleGroup in self._ruleGroups:
-            self._fireflyInterface.createRuleGroup(ruleGroup)
+        for rule_group in self._ruleGroups:
+            self._fireflyInterface.createRuleGroup(rule_group)
 
     def testGetRuleGroups(self):
         # Retrieve all rule groups from the server
@@ -286,11 +286,11 @@ class TestRuleGroupInterface(TestInterfaceBase):
 
         # Check that our test rule groups exist on the server
         rule_group_titles = {rule_group.title for rule_group in server_rule_groups}
-        for ruleGroup in self._ruleGroups:
+        for rule_group in self._ruleGroups:
             self.assertIn(
-                ruleGroup.title,
+                rule_group.title,
                 rule_group_titles,
-                f"{ruleGroup.title} was not found on the server.",
+                f"{rule_group.title} was not found on the server.",
             )
 
     def testDeleteRuleGroups(self):

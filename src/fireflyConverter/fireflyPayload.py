@@ -95,15 +95,15 @@ class PayloadFactory:
         """
         return self.postRule(**rule.__dict__)
 
-    def _toRuleGroupPayload(self, ruleGroup: PostRuleGroup) -> dict[str, Any]:
+    def _toRuleGroupPayload(self, rule_group: PostRuleGroup) -> dict[str, Any]:
         """Convert a PostRuleGroup to a rule group payload.
 
         Args:
-            ruleGroup (PostRuleGroup): The rule group to convert.
+            rule_group (PostRuleGroup): The rule group to convert.
         Returns:
             dict[str, Any]: Rule group payload dictionary.
         """
-        return self.postRuleGroup(**ruleGroup.__dict__)
+        return self.postRuleGroup(**rule_group.__dict__)
 
     def postTransaction(
         self,
