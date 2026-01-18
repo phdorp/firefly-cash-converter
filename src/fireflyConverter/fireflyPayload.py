@@ -515,7 +515,7 @@ class PayloadFactory:
         self,
         limit: int = 100,
         page: int = 1,
-    ) -> dict[str, int]:
+    ) -> dict[str, Any]:
         """Build query parameters for listing rules.
 
         Constructs parameters for a GET request to the Firefly III rules endpoint
@@ -534,7 +534,7 @@ class PayloadFactory:
         self,
         limit: int = 100,
         page: int = 1,
-    ) -> dict[str, int]:
+    ) -> dict[str, Any]:
         """Build query parameters for listing rule groups.
 
         Constructs parameters for a GET request to the Firefly III rule groups endpoint
@@ -545,7 +545,7 @@ class PayloadFactory:
             page (int): Page number. The default pagination is per 50 items. Defaults to 1.
 
         Returns:
-            dict[str, int]: Query parameters dictionary.
+            dict[str, Any]: Query parameters dictionary.
         """
         return {"limit": limit, "page": page}
 
