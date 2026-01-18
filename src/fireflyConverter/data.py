@@ -557,8 +557,8 @@ class GetRule(BaseRule):
 
     Attributes:
         id (int): Rule identifier.
-        created_at (str | None): Rule creation timestamp.
-        updated_at (str | None): Last update timestamp.
+        created_at (str): Rule creation timestamp.
+        updated_at (str): Last update timestamp.
     """
 
     id: int
@@ -587,7 +587,7 @@ class PostRule(BaseRule):
         actions (list | None): List of rule actions to execute. Defaults to None.
     """
 
-    rule_group_id: int = 1
+    rule_group_id: int
     description: str | None = None
     rule_group_title: str | None = None
     order: int | None = None
