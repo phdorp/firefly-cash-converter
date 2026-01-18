@@ -119,7 +119,7 @@ class TestTransferCli(unittest.TestCase):
         # Create and post test rules for each rule group
         rule_group_ids = [int(response.json()["data"]["id"]) for response in rule_group_responses]
         for rule_group_id in rule_group_ids:
-            test_rules = create_test_rules(rule_group_id, "Apply Test" + str(rule_group_id))
+            test_rules = create_test_rules(rule_group_id, f"Apply Test {rule_group_id}")
             for rule in test_rules:
                 self._fireflyInterface.createRule(rule)
 
@@ -148,7 +148,7 @@ class TestTransferCli(unittest.TestCase):
         self.assertEqual(
             len(server_transactions),
             5,
-            "Expected at least 5 transactions to be created on the server",
+            "Expected at 5 transactions to be created on the server",
         )
 
         # Verify rule groups exist and can be accessed by name
