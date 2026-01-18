@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.0](https://github.com/phdorp/firefly-cash-converter/compare/v0.1.0...v0.2.0) (2026-01-18)
+
+
+### Features
+
+* apply rule groups to stored transactions ([#21](https://github.com/phdorp/firefly-cash-converter/issues/21)) ([779311a](https://github.com/phdorp/firefly-cash-converter/commit/779311a399fac19ace5c80978c963c806f6cf837))
+
+
+### Documentation
+
+* add pypi installation instructions ([4518138](https://github.com/phdorp/firefly-cash-converter/commit/451813849b35773797abd2e0f24bd42f9aba99c3)), closes [#18](https://github.com/phdorp/firefly-cash-converter/issues/18)
+* describe rule group argument in readme ([779311a](https://github.com/phdorp/firefly-cash-converter/commit/779311a399fac19ace5c80978c963c806f6cf837))
+
 ## 0.1.0 (2025-12-31)
 
 
