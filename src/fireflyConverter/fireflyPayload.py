@@ -1,6 +1,16 @@
+import math
 from typing import Any, Optional, Union, overload
 
 from fireflyConverter.data import BaseTransaction, PostAccount, PostRule, PostRuleGroup
+
+
+def _hasValue(value: Any) -> bool:
+    """Return True if the value should be included in a payload.
+
+    Excludes None and NaN, which represent missing data, but keeps falsy
+    but valid values (e.g., 0.0, "", False).
+    """
+    return value is not None and not (isinstance(value, float) and math.isnan(value))
 
 
 class PayloadFactory:
@@ -220,89 +230,89 @@ class PayloadFactory:
         }
 
         # Add optional account information
-        if source_id:
+        if _hasValue(source_id):
             transaction["source_id"] = source_id
-        if source_name:
+        if _hasValue(source_name):
             transaction["source_name"] = source_name
-        if destination_id:
+        if _hasValue(destination_id):
             transaction["destination_id"] = destination_id
-        if destination_name:
+        if _hasValue(destination_name):
             transaction["destination_name"] = destination_name
 
         # Add optional category/budget/bill information
-        if category_id:
+        if _hasValue(category_id):
             transaction["category_id"] = category_id
-        if category_name:
+        if _hasValue(category_name):
             transaction["category_name"] = category_name
-        if budget_id:
+        if _hasValue(budget_id):
             transaction["budget_id"] = budget_id
-        if budget_name:
+        if _hasValue(budget_name):
             transaction["budget_name"] = budget_name
-        if bill_id:
+        if _hasValue(bill_id):
             transaction["bill_id"] = bill_id
-        if bill_name:
+        if _hasValue(bill_name):
             transaction["bill_name"] = bill_name
 
         # Add optional currency information
-        if currency_code:
+        if _hasValue(currency_code):
             transaction["currency_code"] = currency_code
-        if currency_id:
+        if _hasValue(currency_id):
             transaction["currency_id"] = currency_id
-        if foreign_amount:
+        if _hasValue(foreign_amount):
             transaction["foreign_amount"] = foreign_amount
-        if foreign_currency_code:
+        if _hasValue(foreign_currency_code):
             transaction["foreign_currency_code"] = foreign_currency_code
-        if foreign_currency_id:
+        if _hasValue(foreign_currency_id):
             transaction["foreign_currency_id"] = foreign_currency_id
 
         # Add optional metadata
-        if tags:
+        if _hasValue(tags):
             transaction["tags"] = tags
-        if notes:
+        if _hasValue(notes):
             transaction["notes"] = notes
-        if internal_reference:
+        if _hasValue(internal_reference):
             transaction["internal_reference"] = internal_reference
-        if external_id:
+        if _hasValue(external_id):
             transaction["external_id"] = external_id
-        if external_url:
+        if _hasValue(external_url):
             transaction["external_url"] = external_url
 
         # Add optional piggy bank information
-        if piggy_bank_id:
+        if _hasValue(piggy_bank_id):
             transaction["piggy_bank_id"] = piggy_bank_id
-        if piggy_bank_name:
+        if _hasValue(piggy_bank_name):
             transaction["piggy_bank_name"] = piggy_bank_name
 
         # Add optional SEPA information
-        if sepa_cc:
+        if _hasValue(sepa_cc):
             transaction["sepa_cc"] = sepa_cc
-        if sepa_ct_op:
+        if _hasValue(sepa_ct_op):
             transaction["sepa_ct_op"] = sepa_ct_op
-        if sepa_ct_id:
+        if _hasValue(sepa_ct_id):
             transaction["sepa_ct_id"] = sepa_ct_id
-        if sepa_db:
+        if _hasValue(sepa_db):
             transaction["sepa_db"] = sepa_db
-        if sepa_country:
+        if _hasValue(sepa_country):
             transaction["sepa_country"] = sepa_country
-        if sepa_ep:
+        if _hasValue(sepa_ep):
             transaction["sepa_ep"] = sepa_ep
-        if sepa_ci:
+        if _hasValue(sepa_ci):
             transaction["sepa_ci"] = sepa_ci
-        if sepa_batch_id:
+        if _hasValue(sepa_batch_id):
             transaction["sepa_batch_id"] = sepa_batch_id
 
         # Add optional date information
-        if interest_date:
+        if _hasValue(interest_date):
             transaction["interest_date"] = interest_date
-        if book_date:
+        if _hasValue(book_date):
             transaction["book_date"] = book_date
-        if process_date:
+        if _hasValue(process_date):
             transaction["process_date"] = process_date
-        if due_date:
+        if _hasValue(due_date):
             transaction["due_date"] = due_date
-        if payment_date:
+        if _hasValue(payment_date):
             transaction["payment_date"] = payment_date
-        if invoice_date:
+        if _hasValue(invoice_date):
             transaction["invoice_date"] = invoice_date
 
         # Build the payload wrapper
@@ -314,7 +324,7 @@ class PayloadFactory:
         }
 
         # Add optional group title
-        if group_title:
+        if _hasValue(group_title):
             payload["group_title"] = group_title
 
         return payload
