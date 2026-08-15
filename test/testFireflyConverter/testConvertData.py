@@ -1,6 +1,9 @@
+import dataclasses as dc
+import math
 import unittest
 
 from fireflyConverter import convertData as cvd
+from fireflyConverter import data
 from fireflyConverter import loadData as ldb
 
 
@@ -91,6 +94,15 @@ class TestFilterByQuery(TestConvertData):
     def testDateRange(self):
         result = self._converter.filterByNamedQuery("date_range")
         self.assertEqual(len(result.transactions), 4)
+
+    def testNoNanValuesAfterFiltering(self):
+        result = self._converter.filterByQuery("amount > 0")
+        self.assertGreater(len(result.transactions), 0)
+        for transaction in result.transactions:
+            for field in dc.fields(data.PostTransaction):
+                value = getattr(transaction, field.name)
+                if isinstance(value, float):
+                    self.assertFalse(math.isnan(value), f"Field {field.name} contains NaN after filtering")
 
 
 class TestFilterByNamedQueries(TestConvertData):
