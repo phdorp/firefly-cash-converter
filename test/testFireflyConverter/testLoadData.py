@@ -1,4 +1,7 @@
+import logging
 import unittest
+
+import pandas as pd
 
 from fireflyConverter import data
 from fireflyConverter import loadData as ldb
@@ -92,6 +95,33 @@ class TestLoaderTr(unittest.TestCase):
 class TestLoaderCommon(TestLoaderTr):
     def setUp(self) -> None:
         self._loader = ldb.DataLoaderCommon("test/data/common")
+
+
+class TestLoaderWarnings(unittest.TestCase):
+    """Test that rows missing the amount field are skipped with a warning."""
+
+    def setUp(self) -> None:
+        self._loader = ldb.DataLoaderCommon("test/data/common")
+
+    def testMissingAmountEmitsWarning(self):
+        dataFrame = pd.DataFrame(
+            [
+                ["date", "amount", "description", "source_name", "destination_name", "type"],
+                ["2025-01-01", 10.0, "valid", None, "tr", "deposit"],
+                ["2025-01-02", None, "no amount", None, "tr", "deposit"],
+            ]
+        )
+
+        logging.disable(logging.NOTSET)
+        try:
+            with self.assertLogs("fireflyConverter.loadData", level="WARNING") as cm:
+                transactions = self._loader._parseData(dataFrame)
+        finally:
+            logging.disable(logging.CRITICAL)
+
+        self.assertEqual(len(transactions), 1)
+        self.assertEqual(transactions[0].description, "valid")
+        self.assertIn("amount", cm.output[0])
 
 
 if __name__ == "__main__":
