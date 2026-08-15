@@ -1,7 +1,12 @@
+import dataclasses as dc
+import json
+import math
 import unittest
 
 from fireflyConverter import convertData as cvd
+from fireflyConverter import data
 from fireflyConverter import loadData as ldb
+from fireflyConverter.fireflyPayload import PayloadFactory
 
 
 class TestConvertData(unittest.TestCase):
@@ -91,6 +96,47 @@ class TestFilterByQuery(TestConvertData):
     def testDateRange(self):
         result = self._converter.filterByNamedQuery("date_range")
         self.assertEqual(len(result.transactions), 4)
+
+    def testNoNanValuesAfterFiltering(self):
+        result = self._converter.filterByQuery("amount > 0")
+        self.assertGreater(len(result.transactions), 0)
+        for transaction in result.transactions:
+            for field in dc.fields(data.PostTransaction):
+                value = getattr(transaction, field.name)
+                if isinstance(value, float):
+                    self.assertFalse(math.isnan(value), f"Field {field.name} contains NaN after filtering")
+
+    def testNoNanInFloatColumnWithMixedNoneValues(self):
+        transactions = [
+            data.PostTransaction(
+                date="2025-01-01T00:00:00",
+                amount=10.0,
+                description="with foreign amount",
+                type="deposit",
+                foreign_amount=1.5,
+            ),
+            data.PostTransaction(
+                date="2025-01-02T00:00:00",
+                amount=20.0,
+                description="without foreign amount",
+                type="deposit",
+            ),
+        ]
+        result = cvd.ConvertData(transactions).filterByQuery("amount > 0")
+        self.assertEqual(len(result.transactions), 2)
+        for transaction in result.transactions:
+            for field in dc.fields(data.BaseTransaction):
+                value = getattr(transaction, field.name)
+                if isinstance(value, float):
+                    self.assertFalse(math.isnan(value), f"Field {field.name} contains NaN after filtering")
+
+    def testPayloadSerializableAfterFiltering(self):
+        result = self._converter.filterByQuery("amount > 0")
+        self.assertGreater(len(result.transactions), 0)
+        payload_factory = PayloadFactory()
+        for transaction in result.transactions:
+            payload = payload_factory.toPayload(transaction)
+            json.dumps(payload, allow_nan=False)
 
 
 class TestFilterByNamedQueries(TestConvertData):
