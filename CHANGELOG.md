@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/phdorp/firefly-cash-converter/compare/v0.2.0...v0.2.1) (2026-08-15)
+
+
+### Bug Fixes
+
+* warn and skip rows missing the required amount field ([d2b70ef](https://github.com/phdorp/firefly-cash-converter/commit/d2b70efb8e0de59d404e971350051e81b3e7a171))
+
 ## [0.2.0](https://github.com/phdorp/firefly-cash-converter/compare/v0.1.0...v0.2.0) (2026-01-18)
 
 
