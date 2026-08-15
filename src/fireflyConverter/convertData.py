@@ -120,9 +120,7 @@ class ConvertData:
         Returns:
             pd.DataFrame: DataFrame representation of the transactions.
         """
-        # Placeholder for conversion logic
-        # This should be replaced with actual conversion code
-        return pd.DataFrame(self._transactions)
+        return pd.DataFrame(self._transactions, dtype=object)
 
     def saveCsv(self, filePath: str):
         """Save the transaction data to a CSV file.
