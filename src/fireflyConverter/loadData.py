@@ -1,6 +1,7 @@
 import abc
 import dataclasses as dc
 import enum
+import logging
 from types import NoneType, UnionType
 from typing import Any, Callable, Dict, List, Optional, Tuple, get_args
 
@@ -8,6 +9,8 @@ import numpy as np
 import pandas as pd
 
 from fireflyConverter import data
+
+logger = logging.getLogger(__name__)
 
 
 class Fields(enum.IntEnum):
@@ -151,12 +154,22 @@ class TableDataLoader(DataLoader):
                     else:
                         raise ValueError(f"Cannot merge multiple values for non-string field {field.name}")
 
-            # Only add the transaction if it contains data
-            if len(transactionData) > 0:
-                for field, function in self._dependentFields.items():
-                    transactionData[field.name] = function(transactionData)
+            # Only add the transaction if it contains data and has required fields
+            if len(transactionData) == 0:
+                continue
 
-                transactions.append(data.PostTransaction(**transactionData))
+            if Fields.amount.name not in transactionData:
+                logger.warning(
+                    "Skipping row %s: missing required field '%s'",
+                    rowIdx,
+                    Fields.amount.name,
+                )
+                continue
+
+            for field, function in self._dependentFields.items():
+                transactionData[field.name] = function(transactionData)
+
+            transactions.append(data.PostTransaction(**transactionData))
 
         return transactions
 
