@@ -160,7 +160,9 @@ class TableDataLoader(DataLoader):
 
             if Fields.amount.name not in transactionData:
                 logger.warning(
-                    f"Skipping row {rowIdx}: missing required field '{Fields.amount.name}'"
+                    "Skipping row %s: missing required field '%s'",
+                    rowIdx,
+                    Fields.amount.name,
                 )
                 continue
 
