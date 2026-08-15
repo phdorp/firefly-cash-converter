@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/phdorp/firefly-cash-converter/compare/v0.2.1...v0.2.2) (2026-08-15)
+
+
+### Bug Fixes
+
+* preserve None values in convert dataframe to avoid NaN payloads ([1ebaae5](https://github.com/phdorp/firefly-cash-converter/commit/1ebaae5fa7c0f9309ad72ed107fb95a379d0ddba))
+
 ## [0.2.1](https://github.com/phdorp/firefly-cash-converter/compare/v0.2.0...v0.2.1) (2026-08-15)
 
 
