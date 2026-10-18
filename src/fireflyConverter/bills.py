@@ -292,7 +292,7 @@ def parseBillResponse(path: str, content: str, *, raw_response: str | None = Non
             note=_toStr(item.get("note")),
             confidence=_toFloat(item.get("confidence")) or 0.0,
         )
-        for item in rawSplits if isinstance(rawSplits, list) else []
+        for item in (rawSplits if isinstance(rawSplits, list) else [])
         if isinstance(item, dict)
     ]
     return data.Bill(
