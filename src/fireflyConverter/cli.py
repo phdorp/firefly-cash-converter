@@ -161,6 +161,9 @@ def convert(arguments: Namespace):
 def transfer(arguments: Namespace):
     """Load source data and push transactions to Firefly via the configured interface.
 
+    When a bills directory is configured, matching transactions are enriched
+    with data read from their bills before the batch is transferred.
+
     Args:
         arguments (Namespace): Parsed CLI arguments.
     """

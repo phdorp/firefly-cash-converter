@@ -32,7 +32,17 @@ For the `transfer` command, you need a `config.toml` file with your Firefly III 
 base_url = "http://your-firefly-instance"
 api_token = "your-api-token-here"
 duplicate_transaction = "ignore"  # options: "error", "ignore"
+
+[bills]
+directory = "./bills"
+report_path = "./bills-report.md"
+
+[llm]
+base_url = "http://127.0.0.1:1234/v1"
+model = "your-local-model"
 ```
+
+The `[bills]` and `[llm]` sections are optional and only needed for bill-aware enrichment.
 
 See the `examples/config.toml` file for reference.
 
@@ -93,6 +103,8 @@ cash transfer <source> [options]
 - `--input_name`: Name of the input file (defaults to source name)
 - `--filter_query`: Optional pandas query to filter transactions (see [Filter Queries](#filter-queries))
 - `--apply_rule_groups`: List of rule group titles to apply after transferring transactions.
+- `--bills_directory`: Directory of bill documents to map onto the transferred transactions (see [Bill-aware enrichment](#bill-aware-enrichment))
+- `--dry_run`: Enrich and report without transferring or archiving anything.
 
 **Example with manual file:**
 
@@ -118,6 +130,44 @@ The following command enables an almost automated transfer of your transaction d
 pytr export_transactions tmp/trade_republic.csv --store_credentials --format csv
 cash transfer trade_republic --account_name "My Trading Account"
 ```
+
+### Bill-aware enrichment
+
+Bills (PDF invoices, receipts, scans or photos) dropped into a folder can be matched one-to-one to imported transactions. When a transaction has a matching bill, a local OpenAI-compatible LLM reads the bill and sets the transaction's category, tags and notes.
+
+Bills are matched to **withdrawal** transactions by exact amount, a date window and vendor similarity. A bill that matches no transaction, matches several, or cannot be read is skipped and listed in the report; the rest of the import continues. Transactions without a bill are transferred unchanged.
+
+The category and every tag must already exist in Firefly III. The LLM is only offered the existing names; anything outside that set is dropped and reported. Extractions below the confidence threshold get neither category nor tags. A marker tag (`bill-matched` by default) and a note pointing at the source file are always written so the enrichment stays traceable.
+
+You need a local model served over an OpenAI-compatible API (for example `llama-server` from llama.cpp). Scanned bills are sent to the model as images, so the model must support vision for photos; digital PDFs are read from their text layer.
+
+```bash
+cash transfer common --bills_directory ./bills --dry_run
+```
+
+Run with `--dry_run` first: it reads the bills, prints the enrichment and writes the report without transferring transactions or archiving bills. When the result looks right, drop `--dry_run`.
+
+```toml
+[bills]
+directory = "./bills"              # folder that holds the dropped bills
+date_window_days = 14              # max day gap between bill and transaction dates
+amount_tolerance = 0.0             # allowed difference between bill total and amount
+vendor_threshold = 0.6             # minimum vendor similarity for a match
+confidence_threshold = 0.5         # below this, category and tags are left empty
+marker_tag = "bill-matched"        # audit tag written onto enriched transactions
+move_processed = true              # archive applied bills after a run
+processed_subdir = "processed"     # subfolder applied bills are moved into
+report_path = "./bills-report.md"  # where the Markdown report is written
+vision = true                      # allow rasterizing scanned bills
+max_pages = 1                      # PDF pages considered for text extraction
+
+[llm]
+base_url = "http://127.0.0.1:1234/v1"
+model = "your-local-model"
+timeout_s = 120
+```
+
+**Note:** do not combine bill-aware enrichment with `--apply_rule_groups`. The enrichment relies on the LLM output, and rule groups would overwrite the category and tags it writes.
 
 ### Filter Queries
 
