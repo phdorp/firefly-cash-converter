@@ -95,8 +95,9 @@ class TestUploadAttachment(unittest.TestCase):
         self.assertEqual(metadataCall.kwargs["json"]["attachable_type"], "TransactionJournal")
         self.assertEqual(metadataCall.kwargs["json"]["attachable_id"], "17")
         self.assertEqual(uploadCall.args[0], "http://firefly.test/api/v1/attachments/42/upload")
-        self.assertTrue(uploadCall.kwargs["data"].closed)
-        self.assertEqual(uploadCall.kwargs["headers"]["Content-Type"], "application/octet-stream")
+        uploadFile = uploadCall.kwargs["files"]["file"]
+        self.assertEqual(uploadFile[0], os.path.basename(bill.name))
+        self.assertTrue(uploadFile[1].closed)
 
 
 class TestCreateSuggestedAccounts(unittest.TestCase):

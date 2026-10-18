@@ -403,8 +403,7 @@ class FireflyInterface:
         with open(path, "rb") as handle:
             uploadResponse = self._session.post(
                 f"{self._api_url}/attachments/{attachmentId}/upload",
-                data=handle,
-                headers={"Content-Type": "application/octet-stream"},
+                files={"file": (filename, handle)},
             )
         uploadResponse.raise_for_status()
         return uploadResponse
