@@ -334,6 +334,8 @@ class Bill:
         tags (list[str]): Tags chosen from the existing Firefly III tags.
         note (str | None): Short human-readable summary of the bill.
         confidence (float): Model confidence in the extraction, between 0 and 1.
+        splits (list[BillSplit]): Optional line-item allocations for a bill whose
+            positions need different categories or tags.
         llm_response (str | None): Raw LLM response text before parsing.
     """
 
@@ -347,7 +349,19 @@ class Bill:
     tags: list[str] = dc.field(default_factory=list)
     note: str | None = None
     confidence: float = 0.0
+    splits: list["BillSplit"] = dc.field(default_factory=list)
     llm_response: str | None = None
+
+
+@dc.dataclass
+class BillSplit:
+    """One line-item allocation extracted from a bill."""
+
+    amount: float | None = None
+    category: str | None = None
+    tags: list[str] = dc.field(default_factory=list)
+    note: str | None = None
+    confidence: float = 0.0
 
 
 @dc.dataclass

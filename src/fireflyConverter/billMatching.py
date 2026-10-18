@@ -314,6 +314,42 @@ def applyBill(
     transaction.tags = resolvedTags
     transaction.notes = _composeNotes(bill, transaction.notes)
 
+    if bill.splits and not additional_bills:
+        splitTotal = sum(float(split.amount) for split in bill.splits if split.amount is not None)
+        if bill.total is None or abs(splitTotal - float(bill.total)) > amountTolerance:
+            issues.append(
+                f"Bill split total {splitTotal:.2f} does not match bill total "
+                f"{bill.total if bill.total is not None else 'unknown'}; splits were not applied"
+            )
+            return issues
+
+        splitTransactions: List[data.TransactionSplit] = []
+        for split in bill.splits:
+            if split.amount is None:
+                issues.append("Bill split without an amount was ignored")
+                continue
+            splitCategory: Optional[str] = None
+            splitTags: List[str] = []
+            if split.confidence >= confidenceThreshold:
+                splitCategory = _canonicalName(split.category, categories)
+                if split.category and splitCategory is None:
+                    issues.append(f"Category '{split.category}' is not defined in Firefly III; left empty")
+                splitTags, unknownTags = _canonicalTags(split.tags, tags)
+                for unknown in unknownTags:
+                    issues.append(f"Tag '{unknown}' is not defined in Firefly III; dropped")
+            splitTransactions.append(
+                data.TransactionSplit(
+                    amount=split.amount,
+                    source_name=transaction.source_name,
+                    destination_name=transaction.destination_name,
+                    category_name=splitCategory,
+                    tags=splitTags + ([markerTag] if markerTag else []),
+                    notes=_composeNotes(bill, split.note),
+                )
+            )
+        if splitTransactions:
+            transaction.split_transactions = splitTransactions
+
     if additional_bills:
         splitTotal = sum(float(additional.total) for additional in [bill, *additional_bills] if additional.total is not None)
         if abs(splitTotal - float(transaction.amount)) > amountTolerance:

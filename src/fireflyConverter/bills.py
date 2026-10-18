@@ -42,6 +42,10 @@ SYSTEM_PROMPT = (
     "using the exact name, or null if none fits. "
     "Choose 'tags' only from the provided list. If multiple bills match one transaction, "
     "each bill contributes its own category, tags and note. "
+    "You may use the 'splits' field for distinct bill positions when splitting them "
+    "produces a materially better match to the provided categories or tags. "
+    "Prefer the fewest splits possible: do not split when one allocation is sufficient, "
+    "and combine positions that have the same suitable category and tags. "
     "Set 'confidence' between 0 and 1 to reflect how certain the extraction is."
 )
 
@@ -57,6 +61,20 @@ BILL_RESPONSE_SCHEMA: Dict[str, Any] = {
         "tags": {"type": "array", "items": {"type": "string"}},
         "note": {"type": ["string", "null"]},
         "confidence": {"type": "number"},
+        "splits": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "amount": {"type": ["number", "null"]},
+                    "category": {"type": ["string", "null"]},
+                    "tags": {"type": "array", "items": {"type": "string"}},
+                    "note": {"type": ["string", "null"]},
+                    "confidence": {"type": "number"},
+                },
+                "required": ["amount", "category", "tags", "note", "confidence"],
+            },
+        },
     },
     # llama.cpp only guarantees the properties listed here: the local model
     # leaves the others out, and a missing bill date would silently disable the
@@ -265,6 +283,18 @@ def parseBillResponse(path: str, content: str, *, raw_response: str | None = Non
         raise BillExtractionError(f"LLM response for {path} is not a JSON object")
 
     confidence = _toFloat(payload.get("confidence"))
+    rawSplits = payload.get("splits")
+    splits = [
+        data.BillSplit(
+            amount=_toFloat(item.get("amount")),
+            category=_toStr(item.get("category")),
+            tags=_toStringList(item.get("tags")),
+            note=_toStr(item.get("note")),
+            confidence=_toFloat(item.get("confidence")) or 0.0,
+        )
+        for item in rawSplits if isinstance(rawSplits, list) else []
+        if isinstance(item, dict)
+    ]
     return data.Bill(
         path=path,
         total=_toFloat(payload.get("total")),
@@ -276,6 +306,7 @@ def parseBillResponse(path: str, content: str, *, raw_response: str | None = Non
         tags=_toStringList(payload.get("tags")),
         note=_toStr(payload.get("note")),
         confidence=confidence if confidence is not None else 0.0,
+        splits=splits,
         llm_response=raw_response,
     )
 
@@ -349,6 +380,8 @@ def _buildUserPrompt(categories: List[str], tags: List[str], accounts: List[str]
         f"Accounts (choose exactly one existing name or null): {accountList}\n"
         f"Tags (choose zero or more names): {tagList}\n"
         "If multiple bills match one split transaction, each bill contributes its own category, tags and note."
+        " If bill positions need different categories or tags, use the fewest possible "
+        "entries in 'splits'; leave it empty when one allocation is sufficient."
     )
 
 

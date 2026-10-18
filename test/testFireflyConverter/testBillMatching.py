@@ -250,6 +250,31 @@ class TestApplyBill(unittest.TestCase):
         self.assertIn("meal", transaction.split_transactions[0].notes)
         self.assertIn("book", transaction.split_transactions[1].notes)
 
+    def testLineItemSplitsUseTheirOwnCategoriesAndTags(self):
+        transaction = _tx(10.0, "2026-10-01", "Shop")
+        bill = _bill(
+            total=10.0,
+            date="2026-10-01",
+            vendor="Shop",
+            confidence=0.9,
+            splits=[
+                data.BillSplit(amount=6.0, category="Food", tags=["meal"], confidence=0.9),
+                data.BillSplit(amount=4.0, category="Books", tags=["business"], confidence=0.9),
+            ],
+        )
+
+        bm.applyBill(
+            bill,
+            transaction,
+            categories=["Food", "Books"],
+            tags=["meal", "business"],
+            accounts=[],
+        )
+
+        self.assertEqual([split.amount for split in transaction.split_transactions], [6.0, 4.0])
+        self.assertEqual([split.category_name for split in transaction.split_transactions], ["Food", "Books"])
+        self.assertEqual([split.tags for split in transaction.split_transactions], [["meal", "bill-matched"], ["business", "bill-matched"]])
+
 
 if __name__ == "__main__":
     unittest.main()

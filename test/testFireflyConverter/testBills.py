@@ -215,6 +215,29 @@ class TestBuildBillMessages(unittest.TestCase):
         self.assertIn("choose exactly one existing name or null", userContent)
         self.assertNotIn("suggest a new account name", userContent)
         self.assertIn("split transaction", userContent)
+        self.assertIn("fewest possible", userContent)
+
+    def testParsesLineItemSplits(self):
+        bill = bills.parseBillResponse(
+            "bill.pdf",
+            json.dumps(
+                {
+                    "total": 12.0,
+                    "splits": [
+                        {
+                            "amount": 7.0,
+                            "category": "Groceries",
+                            "tags": [],
+                            "note": "Food",
+                            "confidence": 0.9,
+                        }
+                    ],
+                }
+            ),
+        )
+
+        self.assertEqual(bill.splits[0].amount, 7.0)
+        self.assertEqual(bill.splits[0].category, "Groceries")
 
     def testImageContentAttachesImageUrl(self):
         content = bills.BillContent(imageDataUri="data:image/png;base64,AAAA")
