@@ -416,6 +416,14 @@ class TestBillAccountPool(unittest.TestCase):
 
         self.assertEqual(accounts, ["Salary"])
 
+    def testImportedAccountComparisonIsCaseInsensitive(self):
+        interface = mock.Mock()
+        interface.getAccounts.return_value = self._accounts(("TR", True, "expense"), ("Groceries", True, "expense"))
+
+        accounts = cli._accountNamesForBills(interface, "tr", enabled=True)
+
+        self.assertEqual(accounts, ["Groceries"])
+
 
 class TestTransferWithBills(unittest.TestCase):
     def setUp(self):

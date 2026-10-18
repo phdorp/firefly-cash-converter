@@ -447,7 +447,7 @@ def _accountNamesForBills(
         account.name
         for account in accounts
         if account.active is not False
-        and account.name != accountName
+        and (accountName is None or account.name.casefold() != accountName.casefold())
         and account.type in allowedTypes
     ]
 
