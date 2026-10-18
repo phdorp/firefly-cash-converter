@@ -134,11 +134,13 @@ cash transfer trade_republic --account_name "My Trading Account"
 
 ### Bill-aware enrichment
 
-Bills (PDF invoices, receipts, scans or photos) dropped into a folder can be matched one-to-one to imported transactions. When a transaction has a matching bill, a local OpenAI-compatible LLM reads the bill and sets the transaction's category, tags and notes.
+Bills (PDF invoices, receipts, scans or photos) dropped into a folder can be matched one-to-one to imported transactions. When a transaction has a matching bill, a local OpenAI-compatible LLM reads the bill and sets the transaction's category, account, tags and notes.
 
 Bills are matched to **withdrawal** transactions by exact amount, a date window and vendor similarity. A bill that matches no transaction, matches several, or cannot be read is skipped and listed in the report; the rest of the import continues. Transactions without a bill are transferred unchanged.
 
-The category and every tag must already exist in Firefly III. The LLM is only offered the existing names; anything outside that set is dropped and reported. Extractions below the confidence threshold get neither category nor tags. A marker tag (`bill-matched` by default) and a note pointing at the source file are always written so the enrichment stays traceable.
+The category, the counter-account and every tag must already exist in Firefly III. The LLM is only offered the existing names; anything outside that set is dropped and reported. Extractions below the confidence threshold get neither category, account nor tags. A marker tag (`bill-matched` by default) and a note pointing at the source file are always written so the enrichment stays traceable.
+
+The counter-account is only filled when the transaction does not already carry one; an existing account is kept and the ignored suggestion is reported. Set `accounts = false` in the `[bills]` section to leave accounts untouched.
 
 You need a local model served over an OpenAI-compatible API (for example `llama-server` from llama.cpp). Scanned bills are sent to the model as images, so the model must support vision for photos; digital PDFs are read from their text layer.
 
@@ -154,13 +156,14 @@ directory = "./bills"              # folder with the bills; setting this enables
 date_window_days = 14              # max day gap between bill and transaction dates
 amount_tolerance = 0.0             # allowed difference between bill total and amount
 vendor_threshold = 0.6             # minimum vendor similarity for a match
-confidence_threshold = 0.5         # below this, category and tags are left empty
+confidence_threshold = 0.5         # below this, category, account and tags are left empty
 marker_tag = "bill-matched"        # audit tag written onto enriched transactions
 move_processed = true              # archive applied bills after a run
 processed_subdir = "processed"     # subfolder applied bills are moved into
 report_path = "./bills-report.md"  # where the Markdown report is written
 vision = true                      # allow sending bills to the vision model
 max_pages = 1                      # PDF pages considered for text extraction
+accounts = true                    # let bills also set the counter-account
 
 [llm]
 base_url = "http://127.0.0.1:1234/v1"
@@ -170,7 +173,7 @@ timeout_s = 120
 
 ### Rules and bills
 
-`--apply_rules` makes Firefly III run all of its rules on each transaction while it is imported. Combined with bill enrichment, the rules are only applied to the transactions that no bill was matched to; the bill-matched transactions keep the category and tags read from their bill. Such rule-labelled transactions are tagged `auto_labeled`, so a single tag filter separates them from the `bill-matched` ones.
+`--apply_rules` makes Firefly III run all of its rules on each transaction while it is imported. Combined with bill enrichment, the rules are only applied to the transactions that no bill was matched to; the bill-matched transactions keep the category, account and tags read from their bill. Such rule-labelled transactions are tagged `auto_labeled`, so a single tag filter separates them from the `bill-matched` ones.
 
 Firefly III applies *all* active rules at import and cannot be limited to a single rule group. Unlike `--apply_rule_groups`, `--apply_rules` only ever touches the transactions of the current run and never re-processes transactions that are already stored.
 

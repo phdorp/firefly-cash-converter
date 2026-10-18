@@ -16,7 +16,7 @@ date_window_days = 14
 amount_tolerance = 0.0
 # minimum vendor similarity for a match (0.0 - 1.0)
 vendor_threshold = 0.6
-# below this, the category and tags are left empty
+# below this, the category, account and tags are left empty
 confidence_threshold = 0.5
 # audit tag written onto enriched transactions
 marker_tag = "bill-matched"
@@ -30,6 +30,8 @@ report_path = "./bills-report.md"
 vision = true
 # PDF pages considered for text extraction
 max_pages = 1
+# let bills also set the transaction's counter-account (only filled when empty)
+accounts = true
 
 # Local OpenAI-compatible LLM (e.g. llama-server from llama.cpp).
 [llm]
