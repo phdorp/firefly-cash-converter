@@ -2,8 +2,11 @@ import os
 import tempfile
 import unittest
 from argparse import ArgumentParser
+from unittest import mock
 
-from fireflyConverter import cli, data
+import pymupdf
+
+from fireflyConverter import cli, data, llmInterface
 from fireflyConverter import fireflyInterface as ffi
 from .testFireflyInterface import create_test_rules
 
@@ -174,6 +177,120 @@ class TestTransferCli(unittest.TestCase):
             )
         except Exception as e:
             self.fail(f"Applying rule groups by name raised an exception: {e}")
+
+
+class _FakeLlm:
+    """Stand-in for the local LLM that returns a fixed bill extraction."""
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def chat(self, messages, response_schema=None, temperature=0.0):
+        return (
+            '{"total": 115.0, "currency": "EUR", "date": "2025-08-01", "vendor": "money", '
+            '"category": "Groceries", "tags": [], "note": "Invoice 7", "confidence": 0.9}'
+        )
+
+
+class TestTransferParser(unittest.TestCase):
+    """Offline tests for the new transfer arguments."""
+
+    def setUp(self):
+        parser = ArgumentParser()
+        cli.defineTransferParser(parser.add_subparsers(dest="command"))
+        self._parser = parser
+
+    def testBillsOptionsAreParsed(self):
+        args = self._parser.parse_args(["transfer", "common", "--bills_directory", "./bills", "--dry_run"])
+
+        self.assertEqual(args.bills_directory, "./bills")
+        self.assertTrue(args.dry_run)
+
+    def testBillsOptionsDefaultToOff(self):
+        args = self._parser.parse_args(["transfer", "common"])
+
+        self.assertIsNone(args.bills_directory)
+        self.assertFalse(args.dry_run)
+
+
+class TestTransferWithBills(unittest.TestCase):
+    def setUp(self):
+        api_token = os.getenv("TEST_API_TOKEN")
+        assert api_token is not None, "TEST_API_TOKEN environment variable must be set for tests."
+
+        self._fireflyInterface = ffi.FireflyInterface(base_url="http://localhost", api_token=api_token)
+        self.addCleanup(self._removeFireflyData)
+
+        self._tempConfig = tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False)
+        self.addCleanup(lambda: os.unlink(self._tempConfig.name))
+
+        self._tempBills = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tempBills.cleanup)
+        self._reportPath = os.path.join(self._tempBills.name, "report.md")
+
+    def _removeFireflyData(self):
+        self._fireflyInterface.deleteAccounts()
+        self._fireflyInterface.deleteRules()
+        self._fireflyInterface.deleteRuleGroups()
+        self._fireflyInterface.purgeUserData()
+
+    def _writeConfig(self):
+        api_token = os.getenv("TEST_API_TOKEN")
+        self._tempConfig.write(
+            f'[firefly_interface]\nbase_url = "http://localhost"\napi_token = "{api_token}"\n'
+            'duplicate_transaction = "ignore"\n\n'
+            '[bills]\nreport_path = "%s"\n\n'
+            '[llm]\nbase_url = "http://127.0.0.1:1234/v1"\nmodel = "test"\n' % self._reportPath
+        )
+        self._tempConfig.flush()
+        self._tempConfig.close()
+
+    def _writeBill(self):
+        path = os.path.join(self._tempBills.name, "acme.pdf")
+        document = pymupdf.open()
+        page = document.new_page()
+        page.insert_text((72, 72), "Invoice from money, total 115,00 EUR")
+        document.save(path)
+        document.close()
+        return path
+
+    @mock.patch.object(llmInterface, "LLMInterface", _FakeLlm)
+    def testDryRunEnrichesWithoutPostingOrArchiving(self):
+        test_dir = os.path.dirname(__file__)
+        test_data_dir = os.path.normpath(os.path.join(test_dir, "..", "data"))
+        self._fireflyInterface.createAccount(data.PostAssetAccount(name="tr"))
+        self._writeConfig()
+        billPath = self._writeBill()
+
+        parser = ArgumentParser()
+        cli.defineTransferParser(parser.add_subparsers(dest="command"))
+        args = parser.parse_args(
+            [
+                "transfer",
+                "common",
+                "--config_path",
+                self._tempConfig.name,
+                "--input_directory",
+                test_data_dir,
+                "--input_name",
+                "common",
+                "--account_name",
+                "tr",
+                "--bills_directory",
+                self._tempBills.name,
+                "--dry_run",
+            ]
+        )
+
+        cli.transfer(args)
+
+        self.assertEqual(len(self._fireflyInterface.getTransactions(limit=100, page=1)), 0, "Dry run must not post")
+        self.assertTrue(os.path.exists(billPath), "Dry run must not archive bills")
+
+        with open(self._reportPath, encoding="utf-8") as handle:
+            report = handle.read()
+        self.assertIn("money - Removal", report)
+        self.assertIn("acme.pdf", report)
 
 
 if __name__ == "__main__":
