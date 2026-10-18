@@ -52,6 +52,22 @@ class _FakeLlm:
         return self._content
 
 
+class TestBillResponseSchema(unittest.TestCase):
+    """Contract tests for the schema the local model is constrained to."""
+
+    def testSchemaRequiresTheFieldsTheMatcherNeeds(self):
+        """llama.cpp only guarantees the properties the schema marks as required.
+
+        A local model that is asked for an optional property tends to leave it
+        out, and a missing bill date silently disables the date window, so the
+        date and the account have to be required to be read back reliably.
+        """
+        required = bills.BILL_RESPONSE_SCHEMA["required"]
+
+        self.assertIn("date", required)
+        self.assertIn("account", required)
+
+
 class TestParseBillResponse(unittest.TestCase):
     def testParsesCompleteJson(self):
         content = json.dumps(

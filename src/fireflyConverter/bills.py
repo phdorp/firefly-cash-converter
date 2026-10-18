@@ -47,7 +47,10 @@ BILL_RESPONSE_SCHEMA: Dict[str, Any] = {
         "note": {"type": ["string", "null"]},
         "confidence": {"type": "number"},
     },
-    "required": ["total", "vendor", "category", "tags", "confidence"],
+    # llama.cpp only guarantees the properties listed here: the local model
+    # leaves the others out, and a missing bill date would silently disable the
+    # date window of the matcher.
+    "required": ["total", "date", "vendor", "category", "account", "tags", "note", "confidence"],
 }
 
 
