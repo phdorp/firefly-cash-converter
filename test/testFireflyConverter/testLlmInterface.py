@@ -21,16 +21,17 @@ class _StubResponse:
 
 
 class _StubSession:
-    """Records outgoing chat requests and returns a scripted response."""
+    """Records outgoing chat requests and returns scripted responses in order."""
 
-    def __init__(self, response):
-        self._response = response
+    def __init__(self, responses):
+        self._responses = responses if isinstance(responses, list) else [responses]
         self.requests = []
         self.headers = {}
 
     def post(self, url, json=None, timeout=None):
         self.requests.append((url, json, timeout))
-        return self._response
+        index = min(len(self.requests) - 1, len(self._responses) - 1)
+        return self._responses[index]
 
 
 class TestLlmInterface(unittest.TestCase):
@@ -73,6 +74,37 @@ class TestLlmInterface(unittest.TestCase):
 
         with self.assertRaises(requests.HTTPError):
             interface.chat([{"role": "user", "content": "hi"}])
+
+    def testChatRetriesWithoutSchemaWhenServerRejectsIt(self):
+        responses = [
+            _StubResponse({}, status_code=400),
+            _StubResponse({"choices": [{"message": {"content": "{}"}}]}),
+        ]
+        interface, session = self._interfaceWith(responses)
+
+        content = interface.chat([{"role": "user", "content": "hi"}], response_schema={"type": "object"})
+
+        self.assertEqual(content, "{}")
+        self.assertEqual(len(session.requests), 2)
+        self.assertNotIn("response_format", session.requests[1][1])
+
+    def testChatDoesNotRetryOnServerError(self):
+        response = _StubResponse({}, status_code=500)
+        interface, session = self._interfaceWith(response)
+
+        with self.assertRaises(requests.HTTPError):
+            interface.chat([{"role": "user", "content": "hi"}], response_schema={"type": "object"})
+
+        self.assertEqual(len(session.requests), 1)
+
+    def testChatDoesNotRetryWhenNoSchemaWasSent(self):
+        response = _StubResponse({}, status_code=400)
+        interface, session = self._interfaceWith(response)
+
+        with self.assertRaises(requests.HTTPError):
+            interface.chat([{"role": "user", "content": "hi"}])
+
+        self.assertEqual(len(session.requests), 1)
 
 
 if __name__ == "__main__":

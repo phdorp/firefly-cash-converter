@@ -70,7 +70,8 @@ class LLMInterface:
             str: The assistant message content.
 
         Raises:
-            requests.HTTPError: If the HTTP request fails.
+            requests.HTTPError: If the HTTP request fails. A schema that the
+                server rejects with a client error is retried once without it.
             KeyError: If the response does not contain assistant content.
         """
         payload: Dict[str, Any] = {
@@ -88,5 +89,13 @@ class LLMInterface:
         url = f"{self._base_url}/chat/completions"
         logger.debug(f"Sending chat request with {len(messages)} message(s)")
         response = self._session.post(url, json=payload, timeout=self._timeout_s)
+
+        if response_schema is not None and 400 <= response.status_code < 500:
+            logger.warning(
+                f"Server rejected the JSON schema (status {response.status_code}); retrying without it"
+            )
+            payload.pop("response_format", None)
+            response = self._session.post(url, json=payload, timeout=self._timeout_s)
+
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"]
