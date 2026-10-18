@@ -140,12 +140,14 @@ cash transfer trade_republic --account_name "My Trading Account"
 
 ### Bill-aware enrichment
 
-Bills (PDF invoices, receipts, scans or photos) dropped into a folder can be matched one-to-one to imported transactions.
+Bills (PDF invoices, receipts, scans or photos) dropped into a folder can be matched to imported transactions.
 Accepted formats: `.pdf`, `.png`, `.jpg`, `.jpeg`, `.webp`, `.heic`, `.heif`. When a transaction has a matching bill, a local OpenAI-compatible LLM reads the bill and sets the transaction's category, account, tags and notes.
 
 Bills are matched to **withdrawal** transactions by exact amount, a date window and vendor similarity. A bill that matches no transaction, matches several, or cannot be read is skipped and listed in the report; the rest of the import continues. Transactions without a bill are transferred unchanged.
 
-The category, the counter-account and every tag must already exist in Firefly III. The LLM is only offered the existing names; anything outside that set is dropped and reported. Extractions below the confidence threshold get neither category, account nor tags. A marker tag (`bill-matched` by default) and a note pointing at the source file are always written so the enrichment stays traceable.
+Categories and tags must already exist in Firefly III. Bills may suggest a new counter-account; it is created automatically as an expense account for withdrawals or an income account for deposits. Extractions below the confidence threshold get neither category, account nor tags. A marker tag (`bill-matched` by default) and a note pointing at the source file are always written so the enrichment stays traceable.
+
+Multiple bills may cover one transaction when their totals add up to the transaction amount. Each bill becomes a split entry with its own category, tags and note. The split limit is five bills by default; additional matches are reported as ambiguous.
 
 The counter-account is only filled when the transaction does not already carry one; an existing account is kept and the ignored suggestion is reported. Set `accounts = false` in the `[bills]` section to leave accounts untouched.
 
@@ -173,6 +175,7 @@ vision = true                      # allow sending bills to the vision model
 # pip install "firefly-cash-converter[heic]"
 max_pages = 1                      # PDF pages considered for text extraction
 accounts = true                    # let bills also set the counter-account
+max_split_balls = 5                # maximum bills contributing to one transaction
 
 [llm]
 base_url = "http://127.0.0.1:1234/v1"
