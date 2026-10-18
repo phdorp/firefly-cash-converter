@@ -11,10 +11,9 @@ logger = logging.getLogger(__name__)
 class LLMInterface:
     """Minimal client for an OpenAI-compatible chat completions endpoint.
 
-    Intended for a local llama-server that exposes the OpenAI API (see
-    ``LLAMA-LOCAL.md``). The client is deliberately thin: it sends chat
-    messages, optionally constrains the reply to a JSON schema, and returns
-    the assistant message content as text.
+    Intended for a local llama-server that exposes the OpenAI API. The client
+    is deliberately thin: it sends chat messages, optionally constrains the
+    reply to a JSON schema, and returns the assistant message content as text.
 
     Attributes:
         _base_url (str): Base URL of the server including the ``/v1`` suffix.
