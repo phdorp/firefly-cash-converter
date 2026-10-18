@@ -103,6 +103,7 @@ cash transfer <source> [options]
 - `--input_name`: Name of the input file (defaults to source name)
 - `--filter_query`: Optional pandas query to filter transactions (see [Filter Queries](#filter-queries))
 - `--apply_rule_groups`: List of rule group titles to apply after transferring transactions.
+- `--apply_rules`: Let Firefly III run all of its rules on each transaction while it is imported. Cannot be combined with `--apply_rule_groups`.
 - `--bills_directory`: Directory of bill documents to map onto the transferred transactions (see [Bill-aware enrichment](#bill-aware-enrichment))
 - `--dry_run`: Enrich and report without transferring or archiving anything.
 
@@ -167,7 +168,13 @@ model = "your-local-model"
 timeout_s = 120
 ```
 
-**Note:** bill-aware enrichment cannot be combined with `--apply_rule_groups`; the command refuses the combination with an error. The enrichment relies on the LLM output, and rule groups would overwrite the category and tags it writes.
+### Rules and bills
+
+`--apply_rules` makes Firefly III run all of its rules on each transaction while it is imported. Combined with bill enrichment, the rules are only applied to the transactions that no bill was matched to; the bill-matched transactions keep the category and tags read from their bill. Such rule-labelled transactions are tagged `auto_labeled`, so a single tag filter separates them from the `bill-matched` ones.
+
+Firefly III applies *all* active rules at import and cannot be limited to a single rule group. Unlike `--apply_rule_groups`, `--apply_rules` only ever touches the transactions of the current run and never re-processes transactions that are already stored.
+
+**Note:** bill-aware enrichment cannot be combined with `--apply_rule_groups`, which would overwrite the category and tags read from the bills; the command refuses the combination with an error. `--apply_rules` and `--apply_rule_groups` are mutually exclusive as well.
 
 ### Filter Queries
 
