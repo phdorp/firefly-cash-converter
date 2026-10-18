@@ -303,6 +303,37 @@ class PostTransaction(BaseTransaction):
 
 
 @dc.dataclass
+class Bill:
+    """Bill data extracted from a single invoice or receipt document.
+
+    Values are produced by the local LLM and consumed by the bill-aware
+    import to enrich the matching transaction. Missing fields stay None so
+    that matching can skip incomplete extractions.
+
+    Attributes:
+        path (str): Path of the source bill file.
+        total (float | None): Gross total amount stated on the bill.
+        currency (str | None): Currency code of the total.
+        date (str | None): Bill date in ISO 8601 (YYYY-MM-DD) format.
+        vendor (str | None): Merchant or issuer name.
+        category (str | None): Category chosen from the existing Firefly III categories.
+        tags (list[str]): Tags chosen from the existing Firefly III tags.
+        note (str | None): Short human-readable summary of the bill.
+        confidence (float): Model confidence in the extraction, between 0 and 1.
+    """
+
+    path: str
+    total: float | None = None
+    currency: str | None = None
+    date: str | None = None
+    vendor: str | None = None
+    category: str | None = None
+    tags: list[str] = dc.field(default_factory=list)
+    note: str | None = None
+    confidence: float = 0.0
+
+
+@dc.dataclass
 class BaseAccount:
     """Base account data class for financial accounts.
 

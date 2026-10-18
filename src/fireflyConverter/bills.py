@@ -1,0 +1,207 @@
+from __future__ import annotations
+
+import dataclasses as dc
+import json
+import logging
+import os
+import re
+from typing import Any, Dict, List, Optional
+
+from fireflyConverter import data
+
+logger = logging.getLogger(__name__)
+
+BILL_EXTENSIONS: tuple[str, ...] = (".pdf", ".png", ".jpg", ".jpeg", ".webp")
+
+SYSTEM_PROMPT = (
+    "You extract structured data from a single invoice or receipt. "
+    "Reply only with JSON matching the requested schema. Use ISO dates (YYYY-MM-DD). "
+    "'total' is the gross amount to pay. Choose 'category' only from the provided list, "
+    "using the exact name, or null if none fits. Choose 'tags' only from the provided list. "
+    "Set 'confidence' between 0 and 1 to reflect how certain the extraction is."
+)
+
+BILL_RESPONSE_SCHEMA: Dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "total": {"type": ["number", "null"]},
+        "currency": {"type": ["string", "null"]},
+        "date": {"type": ["string", "null"]},
+        "vendor": {"type": ["string", "null"]},
+        "category": {"type": ["string", "null"]},
+        "tags": {"type": "array", "items": {"type": "string"}},
+        "note": {"type": ["string", "null"]},
+        "confidence": {"type": "number"},
+    },
+    "required": ["total", "vendor", "category", "tags", "confidence"],
+}
+
+
+class BillExtractionError(Exception):
+    """Raised when an LLM response cannot be parsed into a Bill."""
+
+
+@dc.dataclass
+class BillContent:
+    """Bill document content prepared for the LLM.
+
+    Exactly one of the two fields is normally set: extracted text for digital
+    documents, or a base64 data URI for scans and photos sent to the vision model.
+
+    Attributes:
+        text (str | None): Extracted text layer of the document.
+        imageDataUri (str | None): Data URI of a rendered or captured image.
+    """
+
+    text: Optional[str] = None
+    imageDataUri: Optional[str] = None
+
+
+def discoverBills(directory: str, extensions: tuple[str, ...] = BILL_EXTENSIONS) -> List[str]:
+    """List bill files in a directory, sorted by path.
+
+    Subdirectories (such as a processed-bills folder) and hidden files are
+    ignored, and files whose extension is not a known bill type are skipped.
+
+    Args:
+        directory (str): Directory to scan for bill files.
+        extensions (tuple[str, ...]): Accepted file extensions, lowercase.
+
+    Returns:
+        List[str]: Sorted paths of the discovered bill files.
+    """
+    if not os.path.isdir(directory):
+        logger.warning(f"Bills directory does not exist: {directory}")
+        return []
+
+    found: List[str] = []
+    for entry in os.scandir(directory):
+        if not entry.is_file() or entry.name.startswith("."):
+            continue
+        if os.path.splitext(entry.name)[1].lower() in extensions:
+            found.append(entry.path)
+    return sorted(found)
+
+
+def buildBillMessages(content: BillContent, categories: List[str], tags: List[str]) -> List[Dict[str, Any]]:
+    """Build the chat messages that ask the LLM to read one bill.
+
+    Args:
+        content (BillContent): Text or image content of the bill.
+        categories (List[str]): Category names the model may choose from.
+        tags (List[str]): Tag names the model may choose from.
+
+    Returns:
+        List[Dict[str, Any]]: System and user messages in OpenAI chat format.
+    """
+    prompt = _buildUserPrompt(categories, tags)
+
+    if content.text is not None:
+        userContent: Any = f"{prompt}\n\nBill text:\n\"\"\"\n{content.text}\n\"\"\""
+    else:
+        userContent = [
+            {"type": "text", "text": prompt},
+            {"type": "image_url", "image_url": {"url": content.imageDataUri}},
+        ]
+
+    return [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": userContent},
+    ]
+
+
+def parseBillResponse(path: str, content: str) -> data.Bill:
+    """Parse an LLM response into a Bill.
+
+    Args:
+        path (str): Path of the source bill file, stored on the result.
+        content (str): Raw assistant message content, optionally fenced.
+
+    Returns:
+        data.Bill: The extracted bill data.
+
+    Raises:
+        BillExtractionError: If the content is not a JSON object.
+    """
+    try:
+        payload = json.loads(_extractJsonObject(content))
+    except json.JSONDecodeError as error:
+        raise BillExtractionError(f"Could not parse LLM response for {path}: {error}") from error
+
+    if not isinstance(payload, dict):
+        raise BillExtractionError(f"LLM response for {path} is not a JSON object")
+
+    confidence = _toFloat(payload.get("confidence"))
+    return data.Bill(
+        path=path,
+        total=_toFloat(payload.get("total")),
+        currency=_toStr(payload.get("currency")),
+        date=_toStr(payload.get("date")),
+        vendor=_toStr(payload.get("vendor")),
+        category=_toStr(payload.get("category")),
+        tags=_toStringList(payload.get("tags")),
+        note=_toStr(payload.get("note")),
+        confidence=confidence if confidence is not None else 0.0,
+    )
+
+
+def _buildUserPrompt(categories: List[str], tags: List[str]) -> str:
+    """Render the user prompt including the allowed category and tag names."""
+    categoryList = ", ".join(categories) if categories else "(none defined)"
+    tagList = ", ".join(tags) if tags else "(none defined)"
+    return (
+        "Read the attached bill and return total, currency, date, vendor, category, "
+        "tags, note and confidence.\n"
+        f"Categories (choose exactly one name or null): {categoryList}\n"
+        f"Tags (choose zero or more names): {tagList}"
+    )
+
+
+def _extractJsonObject(content: str) -> str:
+    """Strip surrounding prose and code fences, returning the JSON object text."""
+    text = content.strip()
+    text = re.sub(r"^```[a-zA-Z]*\s*", "", text)
+    text = re.sub(r"\s*```$", "", text)
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end > start:
+        return text[start : end + 1]
+    return text
+
+
+def _toFloat(value: Any) -> Optional[float]:
+    """Coerce a JSON value to a float, tolerating German decimal formatting."""
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        text = value.strip()
+        try:
+            return float(text)
+        except ValueError:
+            pass
+        try:
+            return float(text.replace(".", "").replace(",", "."))
+        except ValueError:
+            return None
+    return None
+
+
+def _toStr(value: Any) -> Optional[str]:
+    """Coerce a JSON value to a non-empty stripped string or None."""
+    if value is None:
+        return None
+    text = value.strip() if isinstance(value, str) else str(value)
+    return text or None
+
+
+def _toStringList(value: Any) -> List[str]:
+    """Coerce a JSON value to a list of non-empty strings."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value.strip()] if value.strip() else []
+    if isinstance(value, (list, tuple)):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return []
