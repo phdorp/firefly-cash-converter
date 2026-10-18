@@ -264,6 +264,7 @@ def applyBill(
     additional_bills: Sequence[data.Bill] = (),
     accountsEnabled: Optional[bool] = None,
     amountTolerance: float = 0.0,
+    maxSplitEntries: int = 5,
 ) -> List[str]:
     """Write bill-derived category, account, tags and notes onto a transaction.
 
@@ -282,6 +283,7 @@ def applyBill(
         additional_bills (Sequence[data.Bill]): Other bills contributing to a split.
         accountsEnabled (Optional[bool]): Retained for API compatibility; unknown account names are never created.
         amountTolerance (float): Allowed difference between split total and transaction amount.
+        maxSplitEntries (int): Maximum number of line-item split entries to apply.
 
     Returns:
         List[str]: Human-readable issues to include in the report.
@@ -315,6 +317,12 @@ def applyBill(
     transaction.notes = _composeNotes(bill, transaction.notes)
 
     if bill.splits and not additional_bills:
+        if len(bill.splits) > maxSplitEntries:
+            issues.append(
+                f"Bill has {len(bill.splits)} split entries; maximum is "
+                f"{maxSplitEntries}; splits were not applied"
+            )
+            return issues
         splitTotal = sum(float(split.amount) for split in bill.splits if split.amount is not None)
         if bill.total is None or abs(splitTotal - float(bill.total)) > amountTolerance:
             issues.append(

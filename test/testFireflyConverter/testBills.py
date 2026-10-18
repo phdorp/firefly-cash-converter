@@ -209,13 +209,14 @@ class TestBuildBillMessages(unittest.TestCase):
         self.assertIn("Restaurants", userContent)
 
     def testPromptRequiresExistingAccountsAndAllowsSplitContributions(self):
-        messages = bills.buildBillMessages(bills.BillContent(text="Total 12,34 EUR"), [], [], [])
+        messages = bills.buildBillMessages(bills.BillContent(text="Total 12,34 EUR"), [], [], [], maxSplits=3)
 
         userContent = messages[1]["content"]
         self.assertIn("choose exactly one existing name or null", userContent)
         self.assertNotIn("suggest a new account name", userContent)
         self.assertIn("split transaction", userContent)
         self.assertIn("fewest possible", userContent)
+        self.assertIn("maximum 3", userContent)
 
     def testParsesLineItemSplits(self):
         bill = bills.parseBillResponse(

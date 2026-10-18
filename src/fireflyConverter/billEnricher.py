@@ -190,6 +190,7 @@ class BillEnricher:
                     additional_bills=outcome.additional_bills,
                     accountsEnabled=self._config.accounts,
                     amountTolerance=self._config.amount_tolerance,
+                    maxSplitEntries=self._config.max_split_balls,
                 )
                 report.issues.extend(f"{os.path.basename(bill.path)}: {issue}" for issue in issues)
                 consumedPaths.update(additional.path for additional in outcome.additional_bills)

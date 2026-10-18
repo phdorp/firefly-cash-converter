@@ -453,7 +453,15 @@ def _runEnrichment(
     tags = interface.getTags()
     accounts = _accountNamesForBills(interface, accountName, billConfig.accounts, billConfig.account_types)
 
-    reader = bls.BillReader(client, categories, tags, accounts, vision=billConfig.vision, maxPages=billConfig.max_pages)
+    reader = bls.BillReader(
+        client,
+        categories,
+        tags,
+        accounts,
+        vision=billConfig.vision,
+        maxPages=billConfig.max_pages,
+        maxSplits=billConfig.max_split_balls,
+    )
     enricher = bce.BillEnricher(reader, categories, tags, accounts, billConfig)
     report = enricher.enrich(transactions)
     return enricher, report

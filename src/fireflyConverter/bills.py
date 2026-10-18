@@ -46,6 +46,7 @@ SYSTEM_PROMPT = (
     "produces a materially better match to the provided categories or tags. "
     "Prefer the fewest splits possible: do not split when one allocation is sufficient, "
     "and combine positions that have the same suitable category and tags. "
+    "Never return more split entries than the configured maximum. "
     "Set 'confidence' between 0 and 1 to reflect how certain the extraction is."
 )
 
@@ -231,7 +232,11 @@ def _toDataUri(raw: bytes, mimeType: str) -> str:
 
 
 def buildBillMessages(
-    content: BillContent, categories: List[str], tags: List[str], accounts: List[str]
+    content: BillContent,
+    categories: List[str],
+    tags: List[str],
+    accounts: List[str],
+    maxSplits: int = 5,
 ) -> List[Dict[str, Any]]:
     """Build the chat messages that ask the LLM to read one bill.
 
@@ -240,11 +245,12 @@ def buildBillMessages(
         categories (List[str]): Category names the model may choose from.
         tags (List[str]): Tag names the model may choose from.
         accounts (List[str]): Account names the model may choose from.
+        maxSplits (int): Maximum number of split entries the model may return.
 
     Returns:
         List[Dict[str, Any]]: System and user messages in OpenAI chat format.
     """
-    prompt = _buildUserPrompt(categories, tags, accounts)
+    prompt = _buildUserPrompt(categories, tags, accounts, maxSplits)
 
     if content.text is not None:
         userContent: Any = f"{prompt}\n\nBill text:\n\"\"\"\n{content.text}\n\"\"\""
@@ -321,6 +327,7 @@ class BillReader:
         _accounts (List[str]): Account names offered to the model.
         _vision (bool): Whether image fallback is allowed for scanned bills.
         _maxPages (int): Number of PDF pages considered for text extraction.
+        _maxSplits (int): Maximum number of split entries requested from the model.
     """
 
     def __init__(
@@ -331,6 +338,7 @@ class BillReader:
         accounts: List[str],
         vision: bool = True,
         maxPages: int = 1,
+        maxSplits: int = 5,
     ) -> None:
         """Initialize the reader.
 
@@ -341,6 +349,7 @@ class BillReader:
             accounts (List[str]): Existing Firefly III account names.
             vision (bool): Allow rasterizing scanned bills. Defaults to True.
             maxPages (int): Number of PDF pages to read text from. Defaults to 1.
+            maxSplits (int): Maximum number of split entries to request. Defaults to 5.
         """
         self._llm = llm
         self._categories = list(categories)
@@ -348,6 +357,7 @@ class BillReader:
         self._accounts = list(accounts)
         self._vision = vision
         self._maxPages = maxPages
+        self._maxSplits = max(1, maxSplits)
 
     def read(self, path: str) -> data.Bill:
         """Read a bill file and return the extracted data.
@@ -363,12 +373,14 @@ class BillReader:
         """
         logger.info(f"Reading bill: {path}")
         content = readBillContent(path, vision=self._vision, maxPages=self._maxPages)
-        messages = buildBillMessages(content, self._categories, self._tags, self._accounts)
+        messages = buildBillMessages(
+            content, self._categories, self._tags, self._accounts, maxSplits=self._maxSplits
+        )
         response = self._llm.chat(messages, response_schema=BILL_RESPONSE_SCHEMA)
         return parseBillResponse(path, response, raw_response=response)
 
 
-def _buildUserPrompt(categories: List[str], tags: List[str], accounts: List[str]) -> str:
+def _buildUserPrompt(categories: List[str], tags: List[str], accounts: List[str], maxSplits: int) -> str:
     """Render the user prompt including the allowed category, tag and account names."""
     categoryList = ", ".join(categories) if categories else "(none defined)"
     tagList = ", ".join(tags) if tags else "(none defined)"
@@ -381,7 +393,7 @@ def _buildUserPrompt(categories: List[str], tags: List[str], accounts: List[str]
         f"Tags (choose zero or more names): {tagList}\n"
         "If multiple bills match one split transaction, each bill contributes its own category, tags and note."
         " If bill positions need different categories or tags, use the fewest possible "
-        "entries in 'splits'; leave it empty when one allocation is sufficient."
+        f"entries in 'splits' (maximum {maxSplits}); leave it empty when one allocation is sufficient."
     )
 
 

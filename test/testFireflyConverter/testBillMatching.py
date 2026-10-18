@@ -275,6 +275,20 @@ class TestApplyBill(unittest.TestCase):
         self.assertEqual([split.category_name for split in transaction.split_transactions], ["Food", "Books"])
         self.assertEqual([split.tags for split in transaction.split_transactions], [["meal", "bill-matched"], ["business", "bill-matched"]])
 
+    def testLineItemSplitsRespectMaximum(self):
+        transaction = _tx(10.0, "2026-10-01", "Shop")
+        bill = _bill(
+            total=10.0,
+            date="2026-10-01",
+            vendor="Shop",
+            splits=[data.BillSplit(amount=5.0), data.BillSplit(amount=3.0), data.BillSplit(amount=2.0)],
+        )
+
+        issues = bm.applyBill(bill, transaction, [], [], [], maxSplitEntries=2)
+
+        self.assertIsNone(transaction.split_transactions)
+        self.assertTrue(any("maximum is 2" in issue for issue in issues))
+
 
 if __name__ == "__main__":
     unittest.main()
