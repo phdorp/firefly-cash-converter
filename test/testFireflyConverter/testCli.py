@@ -347,6 +347,33 @@ class TestRuleApplicationTargets(unittest.TestCase):
         self.assertEqual(cli._matchedTransactionIds(None), set())
 
 
+class TestMatchedBillPaths(unittest.TestCase):
+    def testIncludesPrimaryAndSplitBills(self):
+        transaction = data.PostTransaction(date="2025-01-01", amount=3.0, description="shop", type="withdrawal")
+        report = be.EnrichmentReport(
+            matched=[
+                be.MatchRecord(
+                    bill_path="/b/one.pdf",
+                    description="shop",
+                    category=None,
+                    tags=[],
+                    additional_bills=[data.Bill(path="/b/two.png")],
+                )
+            ],
+            matched_transactions=[transaction],
+        )
+
+        self.assertEqual(cli._matchedBillPaths(report), {id(transaction): ["/b/one.pdf", "/b/two.png"]})
+
+    def testRejectsMismatchedReport(self):
+        report = be.EnrichmentReport(
+            matched=[be.MatchRecord(bill_path="/b/one.pdf", description="shop", category=None, tags=[])]
+        )
+
+        with self.assertRaises(ValueError):
+            cli._matchedBillPaths(report)
+
+
 class TestBillAccountPool(unittest.TestCase):
     """Offline tests for the accounts offered to the bill reader."""
 

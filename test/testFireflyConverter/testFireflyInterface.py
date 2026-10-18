@@ -1,4 +1,5 @@
 import os
+import tempfile
 import unittest
 from dataclasses import fields
 from typing import Set
@@ -71,6 +72,31 @@ class TestCreateTransactionRuleFlag(unittest.TestCase):
 
     def testApplyRulesIsOffByDefault(self):
         self.assertFalse(self._sentPayload()["apply_rules"])
+
+
+class TestUploadAttachment(unittest.TestCase):
+    def setUp(self):
+        self._interface = ffi.FireflyInterface(base_url="http://firefly.test", api_token="token")
+        self._interface._session = mock.Mock()
+        metadata = mock.Mock()
+        metadata.json.return_value = {"data": {"id": "42"}}
+        upload = mock.Mock(status_code=200)
+        self._interface._session.post.side_effect = [metadata, upload]
+
+    def testCreatesAndUploadsTransactionAttachment(self):
+        with tempfile.NamedTemporaryFile(suffix=".jpg") as bill:
+            bill.write(b"jpeg")
+            bill.flush()
+
+            response = self._interface.uploadAttachment(bill.name, "17")
+
+        self.assertEqual(response.status_code, 200)
+        metadataCall, uploadCall = self._interface._session.post.call_args_list
+        self.assertEqual(metadataCall.kwargs["json"]["attachable_type"], "TransactionJournal")
+        self.assertEqual(metadataCall.kwargs["json"]["attachable_id"], "17")
+        self.assertEqual(uploadCall.args[0], "http://firefly.test/api/v1/attachments/42/upload")
+        self.assertTrue(uploadCall.kwargs["data"].closed)
+        self.assertEqual(uploadCall.kwargs["headers"]["Content-Type"], "application/octet-stream")
 
 
 class TestCreateSuggestedAccounts(unittest.TestCase):

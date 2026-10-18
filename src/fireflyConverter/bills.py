@@ -7,7 +7,9 @@ import json
 import logging
 import os
 import re
-from typing import Any, Dict, List, Optional
+import tempfile
+from contextlib import contextmanager
+from typing import Any, Dict, Iterator, List, Optional
 
 import pymupdf
 
@@ -306,6 +308,79 @@ def _readBytes(path: str) -> bytes:
     """Read a file's raw bytes."""
     with open(path, "rb") as handle:
         return handle.read()
+
+
+@contextmanager
+def prepareBillUpload(path: str, renderResolution: int = IMAGE_MAX_SIDE) -> Iterator[tuple[str, str]]:
+    """Prepare a bill file for Firefly attachment upload.
+
+    PDFs are uploaded unchanged. Image files are rendered to bounded JPEGs in
+    a temporary file; the source file is never modified.
+
+    Args:
+        path (str): Source bill path.
+        renderResolution (int): Maximum pixel length of the rendered image side.
+
+    Yields:
+        tuple[str, str]: Upload path and filename.
+
+    Raises:
+        BillExtractionError: If an image cannot be converted to JPEG.
+    """
+    extension = os.path.splitext(path)[1].lower()
+    if extension == ".pdf":
+        yield path, os.path.basename(path)
+        return
+    if extension not in IMAGE_MIME_TYPES and extension not in HEIC_EXTENSIONS:
+        raise BillExtractionError(f"Unsupported bill file type: {path}")
+    if renderResolution <= 0:
+        raise BillExtractionError("renderResolution must be greater than zero")
+
+    temporaryPath: Optional[str] = None
+    try:
+        if extension in HEIC_EXTENSIONS:
+            raw = _heicJpegBytes(path, renderResolution)
+        else:
+            try:
+                with pymupdf.open(path) as document:
+                    page = document.load_page(0)
+                    source = page.get_pixmap()
+                    scale = min(1.0, renderResolution / max(source.width, source.height))
+                    pixmap = page.get_pixmap(matrix=pymupdf.Matrix(scale, scale), alpha=False)
+                    raw = pixmap.tobytes("jpg", jpg_quality=JPEG_QUALITY)
+            except (pymupdf.mupdf.FzErrorFormat, RuntimeError) as error:
+                raise BillExtractionError(f"Could not convert image {path} to JPEG: {error}") from error
+
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as handle:
+            handle.write(raw)
+            temporaryPath = handle.name
+        yield temporaryPath, f"{os.path.splitext(os.path.basename(path))[0]}.jpg"
+    finally:
+        if temporaryPath is not None:
+            try:
+                os.unlink(temporaryPath)
+            except FileNotFoundError:
+                pass
+
+
+def _heicJpegBytes(path: str, renderResolution: int) -> bytes:
+    """Convert a HEIC image to bounded JPEG bytes."""
+    try:
+        import pillow_heif
+        from PIL import Image
+    except ImportError as error:
+        raise BillExtractionError(
+            f"Uploading {path} needs the optional HEIC dependency: "
+            "pip install 'firefly-cash-converter[heic]'"
+        ) from error
+
+    pillow_heif.register_heif_opener()
+    with Image.open(path) as photo:
+        photo = photo.convert("RGB")
+        photo.thumbnail((renderResolution, renderResolution))
+        buffer = io.BytesIO()
+        photo.save(buffer, format="JPEG", quality=JPEG_QUALITY)
+        return buffer.getvalue()
 
 
 def _toDataUri(raw: bytes, mimeType: str) -> str:

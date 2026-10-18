@@ -414,6 +414,31 @@ class TestReadBillContent(unittest.TestCase):
             self.assertEqual(content.text.strip(), "")
 
 
+class TestPrepareBillUpload(unittest.TestCase):
+    def testImageIsConvertedToJpegWithoutChangingSource(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "bill.png")
+            Image.new("RGBA", (4000, 3000), (255, 255, 255, 255)).save(path)
+            sourceSize = os.path.getsize(path)
+
+            with bills.prepareBillUpload(path, renderResolution=800) as (uploadPath, filename):
+                self.assertEqual(filename, "bill.jpg")
+                with Image.open(uploadPath) as image:
+                    self.assertEqual(image.format, "JPEG")
+                    self.assertLessEqual(max(image.size), 800)
+
+            self.assertEqual(os.path.getsize(path), sourceSize)
+            self.assertFalse(os.path.exists(uploadPath))
+
+    def testPdfIsUploadedUnchanged(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = _writePdf(directory, "bill.pdf", text="Invoice")
+
+            with bills.prepareBillUpload(path) as (uploadPath, filename):
+                self.assertEqual(uploadPath, path)
+                self.assertEqual(filename, "bill.pdf")
+
+
 class TestHeicBills(unittest.TestCase):
     """Tests for phone photos in the HEIC format the vision model cannot decode."""
 

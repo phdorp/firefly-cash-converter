@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import enum
 import logging
+import os
 from typing import Dict, List, Optional, Sequence, Tuple, Union, overload
 
 import requests
@@ -367,6 +368,46 @@ class FireflyInterface:
             requests.HTTPError: If the HTTP request fails with a non-422 status code.
         """
         return self._postTransaction(transaction, apply_rules=apply_rules)
+
+    def uploadAttachment(self, path: str, transaction_journal_id: str) -> requests.Response:
+        """Upload and attach a file to a Firefly III transaction journal.
+
+        Firefly III creates the attachment metadata first, then accepts the
+        binary file contents at the attachment-specific upload endpoint.
+
+        Args:
+            path (str): Path to the prepared file.
+            transaction_journal_id (str): Firefly transaction journal ID.
+
+        Returns:
+            requests.Response: The upload response.
+
+        Raises:
+            requests.HTTPError: If either attachment request fails.
+            KeyError: If Firefly III omits the new attachment ID.
+        """
+        filename = os.path.basename(path)
+        logger.info("Uploading attachment %s to transaction %s", filename, transaction_journal_id)
+        metadataResponse = self._session.post(
+            f"{self._api_url}/attachments",
+            json={
+                "filename": filename,
+                "title": filename,
+                "attachable_type": "TransactionJournal",
+                "attachable_id": str(transaction_journal_id),
+            },
+        )
+        metadataResponse.raise_for_status()
+        attachmentId = str(metadataResponse.json()["data"]["id"])
+
+        with open(path, "rb") as handle:
+            uploadResponse = self._session.post(
+                f"{self._api_url}/attachments/{attachmentId}/upload",
+                data=handle,
+                headers={"Content-Type": "application/octet-stream"},
+            )
+        uploadResponse.raise_for_status()
+        return uploadResponse
 
     def getTransactions(
         self,

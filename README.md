@@ -147,6 +147,8 @@ Bills are matched to **withdrawal** transactions by exact amount, a date window 
 
 Categories, tags and bill counter-accounts must already exist in Firefly III. By default, only active expense accounts are offered; configure `account_types` to allow other Firefly account types. Extractions below the confidence threshold get neither category, account nor tags. A marker tag (`bill-matched` by default) and a note pointing at the source file are always written so the enrichment stays traceable.
 
+After each matched transaction is created, every contributing bill is uploaded and attached to its Firefly III transaction. Image bills are converted to bounded JPEG upload copies; PDFs are uploaded unchanged, and the source files are not modified. If an attachment upload fails, the transfer stops before matched bills are archived.
+
 Multiple bills may cover one transaction when their totals add up to the transaction amount. Each bill becomes a split entry with its own category, tags and note. The split limit is five bills by default; additional matches are reported as ambiguous.
 
 For a single bill, the LLM may also split distinct bill positions into separate transaction entries when that gives a materially better match to the available categories or tags. It prefers the fewest entries possible and combines positions with the same suitable classification.

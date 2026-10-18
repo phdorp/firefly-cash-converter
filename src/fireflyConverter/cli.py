@@ -238,10 +238,17 @@ def transfer(arguments: Namespace):
     logger.info(f"Transferring {len(transactions)} transactions to Firefly III")
     processed_count = 0
     rulesAppliedCount = 0
+    matchedBillPaths = _matchedBillPaths(report)
     for transaction in transactions:
         applyRules = _rulesApplyTo(transaction, matchedTransactionIds, applyRulesRequested)
         _tagAutoLabeled(transaction, applyRules, autoLabeled)
         response = interface.createTransaction(transaction, apply_rules=applyRules)
+        billPaths = matchedBillPaths.get(id(transaction), [])
+        if billPaths:
+            journalId = _transactionJournalId(response)
+            for billPath in billPaths:
+                with bls.prepareBillUpload(billPath) as (uploadPath, _):
+                    interface.uploadAttachment(uploadPath, journalId)
         processed_count += 1
         if applyRules:
             rulesAppliedCount += 1
@@ -351,6 +358,29 @@ def _matchedTransactionIds(report: Optional[bce.EnrichmentReport]) -> set[int]:
     if report is None:
         return set()
     return {id(transaction) for transaction in report.matched_transactions}
+
+
+def _matchedBillPaths(report: Optional[bce.EnrichmentReport]) -> dict[int, list[str]]:
+    """Map each matched transaction identity to all contributing bill paths."""
+    if report is None:
+        return {}
+    if len(report.matched) != len(report.matched_transactions):
+        raise ValueError("Bill enrichment report has mismatched matched records and transactions")
+    return {
+        id(transaction): [record.bill_path, *(bill.path for bill in record.additional_bills)]
+        for record, transaction in zip(report.matched, report.matched_transactions)
+    }
+
+
+def _transactionJournalId(response) -> str:
+    """Extract the Firefly transaction journal ID from a create response."""
+    try:
+        journalId = response.json()["data"]["id"]
+    except (AttributeError, KeyError, TypeError, ValueError) as error:
+        raise ValueError("Firefly III did not return a transaction journal ID") from error
+    if journalId is None or not str(journalId).strip():
+        raise ValueError("Firefly III returned an empty transaction journal ID")
+    return str(journalId)
 
 
 def _rulesApplyTo(transaction: data.BaseTransaction, matchedTransactionIds: set[int], requested: bool) -> bool:
