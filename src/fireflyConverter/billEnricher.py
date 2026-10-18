@@ -38,7 +38,7 @@ class BillConfig:
     directory: str
     date_window_days: int = 14
     amount_tolerance: float = 0.0
-    vendor_threshold: float = 0.6
+    vendor_threshold: float = 0.5
     confidence_threshold: float = 0.5
     marker_tag: str = "bill-matched"
     move_processed: bool = True

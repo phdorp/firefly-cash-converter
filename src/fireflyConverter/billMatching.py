@@ -59,8 +59,9 @@ def vendorSimilarity(left: str, right: str) -> float:
         return 0.0
 
     coverage = len(leftTokens & rightTokens) / len(leftTokens)
+    reverseCoverage = len(leftTokens & rightTokens) / len(rightTokens) if rightTokens else 0
     ratio = SequenceMatcher(None, " ".join(sorted(leftTokens)), " ".join(sorted(rightTokens))).ratio()
-    return max(coverage, ratio)
+    return max(coverage, reverseCoverage, ratio)
 
 
 def _tokenize(text: str) -> Set[str]:
