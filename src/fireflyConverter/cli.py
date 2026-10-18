@@ -247,8 +247,8 @@ def transfer(arguments: Namespace):
         if billPaths:
             journalId = _transactionJournalId(response)
             for billPath in billPaths:
-                with bls.prepareBillUpload(billPath) as (uploadPath, _):
-                    interface.uploadAttachment(uploadPath, journalId)
+                with bls.prepareBillUpload(billPath) as (uploadPath, filename):
+                    interface.uploadAttachment(uploadPath, journalId, filename)
         processed_count += 1
         if applyRules:
             rulesAppliedCount += 1

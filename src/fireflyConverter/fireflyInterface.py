@@ -369,7 +369,9 @@ class FireflyInterface:
         """
         return self._postTransaction(transaction, apply_rules=apply_rules)
 
-    def uploadAttachment(self, path: str, transaction_journal_id: str) -> requests.Response:
+    def uploadAttachment(
+        self, path: str, transaction_journal_id: str, filename: Optional[str] = None
+    ) -> requests.Response:
         """Upload and attach a file to a Firefly III transaction journal.
 
         Firefly III creates the attachment metadata first, then accepts the
@@ -386,7 +388,7 @@ class FireflyInterface:
             requests.HTTPError: If either attachment request fails.
             KeyError: If Firefly III omits the new attachment ID.
         """
-        filename = os.path.basename(path)
+        filename = filename or os.path.basename(path)
         logger.info("Uploading attachment %s to transaction %s", filename, transaction_journal_id)
         metadataResponse = self._session.post(
             f"{self._api_url}/attachments",

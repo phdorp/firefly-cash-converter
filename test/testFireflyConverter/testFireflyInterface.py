@@ -99,6 +99,16 @@ class TestUploadAttachment(unittest.TestCase):
         self.assertEqual(uploadFile[0], os.path.basename(bill.name))
         self.assertTrue(uploadFile[1].closed)
 
+    def testUsesProvidedFilenameForUpload(self):
+        with tempfile.NamedTemporaryFile(suffix=".jpg") as bill:
+            bill.write(b"jpeg")
+            bill.flush()
+
+            self._interface.uploadAttachment(bill.name, "17", "original.heic")
+
+        uploadCall = self._interface._session.post.call_args_list[1]
+        self.assertEqual(uploadCall.kwargs["files"]["file"][0], "original.heic")
+
 
 class TestCreateSuggestedAccounts(unittest.TestCase):
     def setUp(self):
