@@ -32,7 +32,7 @@ class BillConfig:
         max_pages (int): Number of PDF pages considered for text extraction.
         render_resolution (int): Maximum pixel length of a rendered image side.
         accounts (bool): Whether bills may also set the transaction's counter-account.
-        max_split_balls (int): Maximum number of bills allowed in one split transaction.
+        max_split_bills (int): Maximum number of bills allowed in one split transaction.
         prompt_examples_directory (str | None): Directory of few-shot prompt examples.
     """
 
@@ -50,7 +50,7 @@ class BillConfig:
     render_resolution: int = 1600
     accounts: bool = True
     account_types: List[str] = dc.field(default_factory=lambda: ["expense"])
-    max_split_balls: int = 5
+    max_split_bills: int = 5
     prompt_examples_directory: Optional[str] = None
 
 
@@ -181,7 +181,7 @@ class BillEnricher:
                     for candidate in loadedBills[index + 1 :]
                     if candidate.path not in consumedPaths
                 ],
-                max_split_balls=self._config.max_split_balls,
+                max_split_bills=self._config.max_split_bills,
             )
             if outcome.status == bm.MATCHED:
                 if outcome.transaction is None:
@@ -198,7 +198,7 @@ class BillEnricher:
                     additional_bills=outcome.additional_bills,
                     accountsEnabled=self._config.accounts,
                     amountTolerance=self._config.amount_tolerance,
-                    maxSplitEntries=self._config.max_split_balls,
+                    maxSplitEntries=self._config.max_split_bills,
                 )
                 report.issues.extend(f"{os.path.basename(bill.path)}: {issue}" for issue in issues)
                 consumedPaths.update(additional.path for additional in outcome.additional_bills)
@@ -207,7 +207,7 @@ class BillEnricher:
                     report.ambiguous.extend(overflow.path for overflow in outcome.overflow_bills)
                     report.issues.append(
                         f"{os.path.basename(bill.path)}: split exceeds the maximum of "
-                        f"{self._config.max_split_balls} bills; extra bills were not applied"
+                        f"{self._config.max_split_bills} bills; extra bills were not applied"
                     )
 
                 accountField = (
@@ -234,7 +234,7 @@ class BillEnricher:
                 if outcome.overflow_bills:
                     consumedPaths.update(ambiguousPaths)
                     report.issues.append(
-                        f"{os.path.basename(bill.path)}: more than {self._config.max_split_balls} "
+                        f"{os.path.basename(bill.path)}: more than {self._config.max_split_bills} "
                         "bills match the transaction; split was not applied"
                     )
             elif outcome.status == bm.ALREADY_MATCHED:

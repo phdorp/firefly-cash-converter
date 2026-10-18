@@ -111,7 +111,7 @@ class BillMatcher:
         self,
         bill: data.Bill,
         additional_bills: Sequence[data.Bill] = (),
-        max_split_balls: int = 5,
+        max_split_bills: int = 5,
     ) -> MatchOutcome:
         """Find the transaction that belongs to a bill, optionally as a split.
 
@@ -131,12 +131,12 @@ class BillMatcher:
             self._claimed.add(id(available[0]))
             return MatchOutcome(MATCHED, available[0])
         if len(available) > 1:
-            splitOutcome = self._matchSplit(bill, additional_bills, max_split_balls)
+            splitOutcome = self._matchSplit(bill, additional_bills, max_split_bills)
             if splitOutcome is not None:
                 return splitOutcome
             return MatchOutcome(AMBIGUOUS)
 
-        splitOutcome = self._matchSplit(bill, additional_bills, max_split_balls)
+        splitOutcome = self._matchSplit(bill, additional_bills, max_split_bills)
         if splitOutcome is not None:
             return splitOutcome
         if candidates:

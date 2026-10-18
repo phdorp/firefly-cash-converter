@@ -484,7 +484,7 @@ def _runEnrichment(
     accounts = _accountNamesForBills(interface, accountName, billConfig.accounts, billConfig.account_types)
     examples = bls.loadPromptExamples(
         billConfig.prompt_examples_directory,
-        maxSplits=billConfig.max_split_balls,
+        maxSplits=billConfig.max_split_bills,
         renderResolution=billConfig.render_resolution,
     )
 
@@ -496,7 +496,7 @@ def _runEnrichment(
         vision=billConfig.vision,
         maxPages=billConfig.max_pages,
         renderResolution=billConfig.render_resolution,
-        maxSplits=billConfig.max_split_balls,
+        maxSplits=billConfig.max_split_bills,
         examples=examples,
     )
     enricher = bce.BillEnricher(reader, categories, tags, accounts, billConfig)

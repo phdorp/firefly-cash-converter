@@ -187,7 +187,7 @@ The `response` object uses this format:
 }
 ```
 
-`total`, `date`, `vendor`, `category`, `account`, `tags`, `note`, and `confidence` are required. `splits` is optional and may contain at most `max_split_balls` entries; each split has `amount`, `category`, `tags`, `note`, and `confidence`.
+`total`, `date`, `vendor`, `category`, `account`, `tags`, `note`, and `confidence` are required. `splits` is optional and may contain at most `max_split_bills` entries; each split has `amount`, `category`, `tags`, `note`, and `confidence`.
 
 ```json
 {
@@ -234,7 +234,7 @@ max_pages = 1                      # PDF pages considered for text extraction
 render_resolution = 1600           # maximum pixels on the longest image side
 accounts = true                    # let bills also set the counter-account
 account_types = ["expense"]        # existing Firefly account types offered to bills
-max_split_balls = 5                # maximum bills contributing to one transaction
+max_split_bills = 5                # maximum bills contributing to one transaction
 
 [llm]
 base_url = "http://127.0.0.1:1234/v1"
