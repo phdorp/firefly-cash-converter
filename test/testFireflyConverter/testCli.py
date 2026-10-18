@@ -438,6 +438,7 @@ class TestTransactionJournalId(unittest.TestCase):
         self.assertEqual(cli._transactionJournalId(response), "17")
 
 
+@unittest.skipUnless(os.getenv("TEST_API_TOKEN"), "requires Firefly III integration environment")
 class TestTransferWithBills(unittest.TestCase):
     def setUp(self):
         api_token = os.getenv("TEST_API_TOKEN")
