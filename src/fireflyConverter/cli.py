@@ -1,7 +1,7 @@
 import enum
 import logging
 from argparse import ArgumentParser, Namespace, _SubParsersAction
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Optional
 
 import toml
 
@@ -194,8 +194,9 @@ def transfer(arguments: Namespace):
     billConfig = None
     enricher = None
     report = None
-    if arguments.bills_directory or "bills" in config:
-        billConfig = _loadBillConfig(config, arguments.bills_directory)
+    billDirectory = _configuredBillDirectory(arguments, config)
+    if billDirectory:
+        billConfig = _loadBillConfig(config, billDirectory)
         enricher, report = _runEnrichment(config, interface, billConfig, transactions)
         _writeReport(billConfig.report_path, report)
 
@@ -235,23 +236,37 @@ def transfer(arguments: Namespace):
                 logger.warning(f"Failed to apply rule group '{rule_group_title}'. Status code: {response.status_code}")
 
 
-def _loadBillConfig(config: dict, directoryOverride: str | None) -> bce.BillConfig:
+def _configuredBillDirectory(arguments: Namespace, config: dict) -> Optional[str]:
+    """Return the bills directory that enables enrichment, or None.
+
+    Enrichment is opt-in: it runs only when a directory is supplied on the
+    command line or set as ``directory`` in the ``[bills]`` section, so simply
+    having other ``[bills]`` settings does not change the transfer behaviour.
+
+    Args:
+        arguments (Namespace): Parsed CLI arguments.
+        config (dict): Parsed configuration file.
+
+    Returns:
+        Optional[str]: The bills directory, or None when enrichment is off.
+    """
+    return arguments.bills_directory or config.get("bills", {}).get("directory")
+
+
+def _loadBillConfig(config: dict, directory: str) -> bce.BillConfig:
     """Build the bill enrichment configuration from the config file.
 
     Args:
         config (dict): Parsed configuration file.
-        directoryOverride (str | None): Directory from ``--bills_directory``.
+        directory (str): Bills directory to use.
 
     Returns:
         bce.BillConfig: Enrichment configuration.
 
     Raises:
-        ValueError: If no bills directory is configured.
+        TypeError: If the ``[bills]`` section contains unknown keys.
     """
     section = dict(config.get("bills", {}))
-    directory = directoryOverride or section.get("directory")
-    if not directory:
-        raise ValueError("Bill enrichment requires --bills_directory or a directory in [bills]")
     section["directory"] = directory
     return bce.BillConfig(**section)
 

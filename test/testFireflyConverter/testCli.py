@@ -1,7 +1,7 @@
 import os
 import tempfile
 import unittest
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 from unittest import mock
 
 import pymupdf
@@ -211,6 +211,38 @@ class TestTransferParser(unittest.TestCase):
 
         self.assertIsNone(args.bills_directory)
         self.assertFalse(args.dry_run)
+
+
+class TestBillDirectorySelection(unittest.TestCase):
+    """Offline tests for the opt-in trigger of bill enrichment."""
+
+    def testCommandLineDirectoryWinsOverConfig(self):
+        arguments = Namespace(bills_directory="./from-flag")
+
+        selected = cli._configuredBillDirectory(arguments, {"bills": {"directory": "./from-config"}})
+
+        self.assertEqual(selected, "./from-flag")
+
+    def testConfigDirectoryEnablesEnrichmentWithoutFlag(self):
+        arguments = Namespace(bills_directory=None)
+
+        selected = cli._configuredBillDirectory(arguments, {"bills": {"directory": "./from-config"}})
+
+        self.assertEqual(selected, "./from-config")
+
+    def testBillsSectionWithoutDirectoryLeavesEnrichmentOff(self):
+        arguments = Namespace(bills_directory=None)
+
+        selected = cli._configuredBillDirectory(arguments, {"bills": {"report_path": "./report.md"}})
+
+        self.assertIsNone(selected)
+
+    def testLoadBillConfigUsesSectionValuesAndDirectory(self):
+        config = cli._loadBillConfig({"bills": {"date_window_days": 7}}, "/bills")
+
+        self.assertEqual(config.directory, "/bills")
+        self.assertEqual(config.date_window_days, 7)
+        self.assertEqual(config.marker_tag, "bill-matched")
 
 
 class TestTransferWithBills(unittest.TestCase):

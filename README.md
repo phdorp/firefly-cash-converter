@@ -42,7 +42,7 @@ base_url = "http://127.0.0.1:1234/v1"
 model = "your-local-model"
 ```
 
-The `[bills]` and `[llm]` sections are optional and only needed for bill-aware enrichment.
+The `[bills]` and `[llm]` sections are optional. Bill-aware enrichment is off until a bills directory is set, either with `--bills_directory` or as `directory` in `[bills]`; other `[bills]` settings alone do not change the transfer behaviour.
 
 See the `examples/config.toml` file for reference.
 
@@ -149,7 +149,7 @@ Run with `--dry_run` first: it reads the bills, prints the enrichment and writes
 
 ```toml
 [bills]
-directory = "./bills"              # folder that holds the dropped bills
+directory = "./bills"              # folder with the bills; setting this enables enrichment
 date_window_days = 14              # max day gap between bill and transaction dates
 amount_tolerance = 0.0             # allowed difference between bill total and amount
 vendor_threshold = 0.6             # minimum vendor similarity for a match

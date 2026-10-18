@@ -5,10 +5,11 @@ base_url = "http://your-firefly-instance"
 api_token = "your-api-token-here"
 duplicate_transaction = "ignore"  # options: "error", "ignore"
 
-# Optional bill-aware enrichment. Used by `cash transfer --bills_directory`.
+# Optional bill-aware enrichment. Enrichment stays off until `directory` is set
+# (or `--bills_directory` is passed to `cash transfer`).
 [bills]
 # folder that holds the dropped bills (PDF invoices, receipts, scans or photos)
-directory = "./bills"
+# directory = "./bills"
 # max day gap between bill and transaction dates
 date_window_days = 14
 # allowed difference between bill total and transaction amount
