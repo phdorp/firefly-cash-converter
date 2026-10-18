@@ -9,6 +9,9 @@ duplicate_transaction = "ignore"  # options: "error", "ignore"
 # (or `--bills_directory` is passed to `cash transfer`).
 [bills]
 # folder that holds the dropped bills (PDF invoices, receipts, scans or photos)
+# Accepted formats: .pdf, .png, .jpg, .jpeg, .webp, .heic, .heif
+# HEIC/HEIF photos (iPhone) are transcoded to JPEG locally.
+# Requires: pip install "firefly-cash-converter[heic]"
 # directory = "./bills"
 # max day gap between bill and transaction dates
 date_window_days = 14

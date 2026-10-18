@@ -19,6 +19,12 @@ or from [PyPI](https://pypi.org/project/firefly-cash-converter/)
 
 ```bash
 pip install firefly-cash-converter
+
+For iPhone HEIC/HEIF photo support, install the optional extra:
+
+```bash
+pip install "firefly-cash-converter[heic]"
+```
 ```
 
 This will install the `cash` command-line tool for converting and transferring financial transactions.
@@ -134,7 +140,8 @@ cash transfer trade_republic --account_name "My Trading Account"
 
 ### Bill-aware enrichment
 
-Bills (PDF invoices, receipts, scans or photos) dropped into a folder can be matched one-to-one to imported transactions. When a transaction has a matching bill, a local OpenAI-compatible LLM reads the bill and sets the transaction's category, account, tags and notes.
+Bills (PDF invoices, receipts, scans or photos) dropped into a folder can be matched one-to-one to imported transactions.
+Accepted formats: `.pdf`, `.png`, `.jpg`, `.jpeg`, `.webp`, `.heic`, `.heif`. When a transaction has a matching bill, a local OpenAI-compatible LLM reads the bill and sets the transaction's category, account, tags and notes.
 
 Bills are matched to **withdrawal** transactions by exact amount, a date window and vendor similarity. A bill that matches no transaction, matches several, or cannot be read is skipped and listed in the report; the rest of the import continues. Transactions without a bill are transferred unchanged.
 
@@ -162,6 +169,8 @@ move_processed = true              # archive applied bills after a run
 processed_subdir = "processed"     # subfolder applied bills are moved into
 report_path = "./bills-report.md"  # where the Markdown report is written
 vision = true                      # allow sending bills to the vision model
+# HEIC/HEIF photos (iPhone) are transcoded to JPEG locally; requires:
+# pip install "firefly-cash-converter[heic]"
 max_pages = 1                      # PDF pages considered for text extraction
 accounts = true                    # let bills also set the counter-account
 
