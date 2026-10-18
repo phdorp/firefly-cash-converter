@@ -25,15 +25,17 @@ dependencies = [
 heic = [
     "pillow-heif>=1.8",
 ]
+test = [
+    "python-dotenv",
+    "pytest",
+]
+
+[dependency-groups]
 dev = [
     "python-dotenv",
     "pytest",
     "pytest-cov",
     "pillow-heif>=1.8",
-]
-test = [
-    "python-dotenv",
-    "pytest",
 ]
 
 [build-system]

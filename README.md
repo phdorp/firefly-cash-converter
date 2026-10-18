@@ -289,10 +289,10 @@ Once the test server is running and the API token is configured in the `.env` fi
 
 ```bash
 # Install package with dev dependencies
-pip install -e ".[dev]"
+uv sync --dev
 
 # Run all tests
-pytest --cov=fireflyConverter test/
+uv run pytest --cov=fireflyConverter test/
 ```
 
 **Note:** The `.env` file is automatically loaded by the test suite using `python-dotenv` (included in dev dependencies).
