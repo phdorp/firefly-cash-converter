@@ -251,6 +251,64 @@ class TestBuildBillMessages(unittest.TestCase):
         self.assertEqual(len(imageParts), 1)
         self.assertEqual(imageParts[0]["image_url"]["url"], "data:image/png;base64,AAAA")
 
+    def testLoadsTextAndImagePromptExamples(self):
+        with tempfile.TemporaryDirectory() as directory:
+            _write(directory, "text.txt", "Coffee 4.00 EUR")
+            _writeBytes(directory, "photo.png", _TINY_PNG)
+            response = {
+                "total": 4.0,
+                "date": "2026-10-01",
+                "vendor": "Cafe",
+                "category": "Restaurants",
+                "account": None,
+                "tags": [],
+                "note": "Coffee",
+                "confidence": 0.9,
+            }
+            for name, inputName in (("text.json", "text.txt"), ("photo.json", "photo.png")):
+                with open(os.path.join(directory, name), "w", encoding="utf-8") as handle:
+                    json.dump({"input": inputName, "response": response}, handle)
+
+            examples = bills.loadPromptExamples(directory, maxSplits=2)
+            messages = bills.buildBillMessages(
+                bills.BillContent(text="Current bill"),
+                categories=["Restaurants"],
+                tags=[],
+                accounts=[],
+                maxSplits=2,
+                examples=examples,
+            )
+
+        self.assertEqual(len(examples), 2)
+        self.assertIsInstance(messages[1]["content"], list)
+        self.assertTrue(
+            any('"vendor": "Cafe"' in part.get("text", "") for part in messages[1]["content"])
+        )
+        self.assertEqual(
+            len([part for part in messages[1]["content"] if part["type"] == "image_url"]),
+            1,
+        )
+
+    def testRejectsExampleWithTooManySplits(self):
+        with tempfile.TemporaryDirectory() as directory:
+            _write(directory, "bill.txt", "Mixed bill")
+            response = {
+                "total": 4.0,
+                "date": "2026-10-01",
+                "vendor": "Cafe",
+                "category": None,
+                "account": None,
+                "tags": [],
+                "note": None,
+                "confidence": 0.9,
+                "splits": [{}, {}, {}],
+            }
+            with open(os.path.join(directory, "example.json"), "w", encoding="utf-8") as handle:
+                json.dump({"input": "bill.txt", "response": response}, handle)
+
+            with self.assertRaises(bills.BillExtractionError):
+                bills.loadPromptExamples(directory, maxSplits=2)
+
 
 class TestReadBillContent(unittest.TestCase):
     def testImageFileBecomesDataUri(self):

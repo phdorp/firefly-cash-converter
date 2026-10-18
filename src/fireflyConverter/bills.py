@@ -33,6 +33,7 @@ PDF_TEXT_MIN_CHARS = 20
 # larger than the model needs, and the request would carry megabytes otherwise.
 IMAGE_MAX_SIDE = 1600
 JPEG_QUALITY = 85
+EXAMPLE_METADATA_EXTENSION = ".json"
 
 SYSTEM_PROMPT = (
     "You extract structured data from a single invoice or receipt. "
@@ -102,6 +103,48 @@ class BillContent:
 
     text: Optional[str] = None
     imageDataUri: Optional[str] = None
+
+
+@dc.dataclass
+class PromptExample:
+    """One bill input and its expected structured response."""
+
+    name: str
+    content: BillContent
+    response: Dict[str, Any]
+
+
+def loadPromptExamples(directory: str | None, maxSplits: int = 5) -> List[PromptExample]:
+    """Load prompt examples from metadata JSON files in a directory."""
+    if not directory:
+        return []
+    if not os.path.isdir(directory):
+        raise BillExtractionError(f"Prompt examples directory does not exist: {directory}")
+
+    examples: List[PromptExample] = []
+    for metadataPath in sorted(discoverBills(directory, (EXAMPLE_METADATA_EXTENSION,))):
+        try:
+            with open(metadataPath, encoding="utf-8") as handle:
+                metadata = json.load(handle)
+            inputPath = metadata["input"]
+            response = metadata["response"]
+            if not isinstance(inputPath, str) or not isinstance(response, dict):
+                raise ValueError("'input' must be a string and 'response' must be an object")
+            if any(field not in response for field in BILL_RESPONSE_SCHEMA["required"]):
+                raise ValueError("response is missing a required bill field")
+            rawSplits = response.get("splits", [])
+            if not isinstance(rawSplits, list) or len(rawSplits) > maxSplits:
+                raise ValueError(f"response must contain at most {maxSplits} split entries")
+            inputFile = os.path.join(directory, inputPath)
+            if os.path.splitext(inputFile)[1].lower() in (".txt", ".md"):
+                with open(inputFile, encoding="utf-8") as handle:
+                    content = BillContent(text=handle.read())
+            else:
+                content = readBillContent(inputFile)
+            examples.append(PromptExample(os.path.basename(metadataPath), content, response))
+        except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError, BillExtractionError) as error:
+            raise BillExtractionError(f"Invalid prompt example {metadataPath}: {error}") from error
+    return examples
 
 
 def discoverBills(directory: str, extensions: tuple[str, ...] = BILL_EXTENSIONS) -> List[str]:
@@ -237,6 +280,7 @@ def buildBillMessages(
     tags: List[str],
     accounts: List[str],
     maxSplits: int = 5,
+    examples: List[PromptExample] | None = None,
 ) -> List[Dict[str, Any]]:
     """Build the chat messages that ask the LLM to read one bill.
 
@@ -246,19 +290,19 @@ def buildBillMessages(
         tags (List[str]): Tag names the model may choose from.
         accounts (List[str]): Account names the model may choose from.
         maxSplits (int): Maximum number of split entries the model may return.
+        examples (List[PromptExample] | None): Few-shot bill/response examples.
 
     Returns:
         List[Dict[str, Any]]: System and user messages in OpenAI chat format.
     """
     prompt = _buildUserPrompt(categories, tags, accounts, maxSplits)
+    examples = examples or []
+    exampleText = _renderExampleText(examples)
 
     if content.text is not None:
-        userContent: Any = f"{prompt}\n\nBill text:\n\"\"\"\n{content.text}\n\"\"\""
+        userContent: Any = _buildTextUserContent(prompt, exampleText, content.text, examples)
     else:
-        userContent = [
-            {"type": "text", "text": prompt},
-            {"type": "image_url", "image_url": {"url": content.imageDataUri}},
-        ]
+        userContent = _buildMultimodalUserContent(prompt, content, examples)
 
     return [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -339,6 +383,7 @@ class BillReader:
         vision: bool = True,
         maxPages: int = 1,
         maxSplits: int = 5,
+        examples: List[PromptExample] | None = None,
     ) -> None:
         """Initialize the reader.
 
@@ -350,6 +395,7 @@ class BillReader:
             vision (bool): Allow rasterizing scanned bills. Defaults to True.
             maxPages (int): Number of PDF pages to read text from. Defaults to 1.
             maxSplits (int): Maximum number of split entries to request. Defaults to 5.
+            examples (List[PromptExample] | None): Few-shot examples for the model.
         """
         self._llm = llm
         self._categories = list(categories)
@@ -358,6 +404,7 @@ class BillReader:
         self._vision = vision
         self._maxPages = maxPages
         self._maxSplits = max(1, maxSplits)
+        self._examples = list(examples or [])
 
     def read(self, path: str) -> data.Bill:
         """Read a bill file and return the extracted data.
@@ -374,7 +421,12 @@ class BillReader:
         logger.info(f"Reading bill: {path}")
         content = readBillContent(path, vision=self._vision, maxPages=self._maxPages)
         messages = buildBillMessages(
-            content, self._categories, self._tags, self._accounts, maxSplits=self._maxSplits
+            content,
+            self._categories,
+            self._tags,
+            self._accounts,
+            maxSplits=self._maxSplits,
+            examples=self._examples,
         )
         response = self._llm.chat(messages, response_schema=BILL_RESPONSE_SCHEMA)
         return parseBillResponse(path, response, raw_response=response)
@@ -395,6 +447,68 @@ def _buildUserPrompt(categories: List[str], tags: List[str], accounts: List[str]
         " If bill positions need different categories or tags, use the fewest possible "
         f"entries in 'splits' (maximum {maxSplits}); leave it empty when one allocation is sufficient."
     )
+
+
+def _renderExampleText(examples: List[PromptExample]) -> str:
+    """Render text portions of few-shot examples."""
+    parts = ["\n\nExamples of bill extractions:"]
+    for index, example in enumerate(examples, start=1):
+        parts.append(f"\nExample {index} ({example.name}) expected response:\n{json.dumps(example.response, ensure_ascii=False)}")
+        if example.content.text is not None:
+            parts.append(f"Example {index} bill text:\n\"\"\"\n{example.content.text}\n\"\"\"")
+        else:
+            parts.append(f"Example {index} bill image is attached below.")
+    return "\n".join(parts)
+
+
+def _buildTextUserContent(
+    prompt: str, exampleText: str, billText: str, examples: List[PromptExample]
+) -> str | List[Dict[str, Any]]:
+    """Build text-only or multimodal content when examples include images."""
+    imageExamples = [example for example in examples if example.content.imageDataUri]
+    if not imageExamples:
+        return f"{prompt}{exampleText}\n\nBill text:\n\"\"\"\n{billText}\n\"\"\""
+    return _buildMultimodalUserContent(prompt, BillContent(text=billText), examples)
+
+
+def _buildMultimodalUserContent(
+    prompt: str, content: BillContent, examples: List[PromptExample]
+) -> List[Dict[str, Any]]:
+    """Build user content parts for examples and the current bill."""
+    parts: List[Dict[str, Any]] = [{"type": "text", "text": prompt}]
+    for index, example in enumerate(examples, start=1):
+        parts.append(
+            {
+                "type": "text",
+                "text": (
+                    f"\nExample {index} ({example.name}) expected response:\n"
+                    f"{json.dumps(example.response, ensure_ascii=False)}"
+                ),
+            }
+        )
+        if example.content.text is not None:
+            parts.append(
+                {
+                    "type": "text",
+                    "text": f"Example {index} bill text:\n\"\"\"\n{example.content.text}\n\"\"\"",
+                }
+            )
+        if example.content.imageDataUri:
+            parts.append(
+                {
+                    "type": "text",
+                    "text": f"Example {index} bill image:",
+                }
+            )
+            parts.append(
+                {"type": "image_url", "image_url": {"url": example.content.imageDataUri}}
+            )
+    if content.text is not None:
+        parts.append({"type": "text", "text": f"\nCurrent bill text:\n\"\"\"\n{content.text}\n\"\"\""})
+    else:
+        parts.append({"type": "text", "text": "\nCurrent bill image is attached below."})
+        parts.append({"type": "image_url", "image_url": {"url": content.imageDataUri}})
+    return parts
 
 
 def _extractJsonObject(content: str) -> str:

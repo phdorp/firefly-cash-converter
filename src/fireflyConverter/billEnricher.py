@@ -32,6 +32,7 @@ class BillConfig:
         max_pages (int): Number of PDF pages considered for text extraction.
         accounts (bool): Whether bills may also set the transaction's counter-account.
         max_split_balls (int): Maximum number of bills allowed in one split transaction.
+        prompt_examples_directory (str | None): Directory of few-shot prompt examples.
     """
 
     directory: str
@@ -48,6 +49,7 @@ class BillConfig:
     accounts: bool = True
     account_types: List[str] = dc.field(default_factory=lambda: ["expense"])
     max_split_balls: int = 5
+    prompt_examples_directory: Optional[str] = None
 
 
 @dc.dataclass

@@ -151,6 +151,32 @@ Multiple bills may cover one transaction when their totals add up to the transac
 
 For a single bill, the LLM may also split distinct bill positions into separate transaction entries when that gives a materially better match to the available categories or tags. It prefers the fewest entries possible and combines positions with the same suitable classification.
 
+You can provide few-shot bill examples outside the settings file with `prompt_examples_directory`:
+
+```toml
+[bills]
+prompt_examples_directory = "./bill-examples"
+```
+
+Each `*.json` file in that directory must contain an `input` path (relative to the examples directory) and a `response` object matching the bill response schema. The input may be a `.txt`/`.md` bill description, PDF, or supported image. Example response objects may include `splits`, but cannot exceed `max_split_balls`; all examples are included in every bill prompt.
+
+```json
+{
+  "input": "mixed-receipt.txt",
+  "response": {
+    "total": 12.0,
+    "currency": "EUR",
+    "date": "2026-10-01",
+    "vendor": "Example Market",
+    "category": "Groceries",
+    "account": null,
+    "tags": ["business"],
+    "note": "Example receipt",
+    "confidence": 0.95
+  }
+}
+```
+
 The counter-account is only filled when the transaction does not already carry one; an existing account is kept and the ignored suggestion is reported. Set `accounts = false` in the `[bills]` section to leave accounts untouched.
 
 You need a local model served over an OpenAI-compatible API (for example `llama-server` from llama.cpp). Scanned bills are sent to the model as images, so the model must support vision for photos; digital PDFs are read from their text layer.
