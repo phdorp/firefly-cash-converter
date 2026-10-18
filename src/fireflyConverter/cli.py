@@ -237,6 +237,10 @@ def transfer(arguments: Namespace):
         logger.info("Dry run completed; no transactions were transferred")
         return
 
+    if report is not None and report.new_accounts:
+        logger.info(f"Creating {len(report.new_accounts)} account(s) suggested by bills")
+        interface.createAccounts(report.new_accounts)
+
     logger.info(f"Transferring {len(transactions)} transactions to Firefly III")
     processed_count = 0
     rulesAppliedCount = 0

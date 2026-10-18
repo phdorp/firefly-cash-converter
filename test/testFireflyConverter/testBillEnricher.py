@@ -199,6 +199,68 @@ class TestBillEnricher(unittest.TestCase):
             self.assertEqual(transaction.destination_name, "Restaurants")
             self.assertEqual(report.matched[0].account, "Restaurants")
 
+    def testCollectsUnknownAccountsForCreation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            billPath = _write(directory, "acme.pdf")
+            reader = _StubReader(
+                {
+                    billPath: data.Bill(
+                        path=billPath,
+                        total=115.0,
+                        date="2025-08-01",
+                        vendor="money",
+                        account="New merchant",
+                        confidence=0.9,
+                    )
+                }
+            )
+            transaction = _tx(115.0, "2025-08-01", "money - Removal")
+            enricher = be.BillEnricher(
+                reader, categories=[], tags=[], accounts=["Existing"], config=be.BillConfig(directory=directory)
+            )
+
+            report = enricher.enrich([transaction])
+            unpackedReport, newAccounts = report
+
+            self.assertIs(unpackedReport, report)
+            self.assertEqual(newAccounts, [("New merchant", "expense")])
+
+    def testReportsAdditionalBillsOnASplit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            firstPath = _write(directory, "one.pdf")
+            secondPath = _write(directory, "two.pdf")
+            reader = _StubReader(
+                {
+                    firstPath: data.Bill(
+                        path=firstPath,
+                        total=40.0,
+                        date="2025-08-01",
+                        vendor="money",
+                        category="Food",
+                        confidence=0.9,
+                    ),
+                    secondPath: data.Bill(
+                        path=secondPath,
+                        total=75.0,
+                        date="2025-08-01",
+                        vendor="money",
+                        category="Books",
+                        confidence=0.9,
+                    ),
+                }
+            )
+            transaction = _tx(115.0, "2025-08-01", "money - Removal")
+            enricher = be.BillEnricher(
+                reader, categories=["Food", "Books"], tags=[], accounts=[], config=be.BillConfig(directory=directory)
+            )
+
+            report = enricher.enrich([transaction])
+
+            self.assertEqual(len(report.matched), 1)
+            self.assertEqual([bill.path for bill in report.matched[0].additional_bills], [secondPath])
+            self.assertEqual(report.ambiguous, [])
+            self.assertEqual([split.amount for split in transaction.split_transactions], [40.0, 75.0])
+
     def testRenderReportListsOutcomes(self):
         report = be.EnrichmentReport(
             matched=[

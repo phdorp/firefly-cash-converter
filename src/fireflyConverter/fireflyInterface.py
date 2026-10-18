@@ -3,7 +3,7 @@ from __future__ import annotations
 import ast
 import enum
 import logging
-from typing import Dict, List, Optional, Union, overload
+from typing import Dict, List, Optional, Sequence, Tuple, Union, overload
 
 import requests
 
@@ -212,11 +212,16 @@ class FireflyInterface:
         logger.info(f"Retrieved {len(tags)} tags from Firefly III")
         return tags
 
-    def createAccount(self, account: data.PostAccount) -> requests.Response:
+    def createAccount(
+        self,
+        account: data.PostAccount | str,
+        account_type: Optional[str] = None,
+    ) -> requests.Response:
         """Create a new account on the Firefly III server.
 
         Args:
-            account (data.PostAccount): The account object to create.
+            account (data.PostAccount | str): The account object or account name to create.
+            account_type (Optional[str]): Account type when ``account`` is a name.
 
         Returns:
             requests.Response: The HTTP response from the Firefly API.
@@ -224,6 +229,14 @@ class FireflyInterface:
         Raises:
             requests.HTTPError: If the HTTP request fails.
         """
+        if isinstance(account, str):
+            if account_type == "expense":
+                account = data.PostExpenseAccount(name=account)
+            elif account_type == "income":
+                account = data.PostIncomeAccount(name=account)
+            else:
+                raise ValueError(f"Unsupported account type: {account_type}")
+
         logger.info(f"Creating account: {account.name}")
         url = f"{self._api_url}/accounts"
         payload = self._payloadFactory.toPayload(account)
@@ -231,6 +244,27 @@ class FireflyInterface:
         resp.raise_for_status()
         logger.debug(f"Account {account.name} created successfully (status: {resp.status_code})")
         return resp
+
+    def createAccounts(self, names: Sequence[Tuple[str, str]]) -> None:
+        """Create missing bill-suggested accounts in one batch operation.
+
+        Existing accounts are compared case-insensitively and are skipped.
+        A failed account creation is logged and does not prevent the remaining
+        accounts from being attempted.
+        """
+        if not names:
+            return
+
+        existing = {account.name.strip().lower() for account in self.getAccounts()}
+        for name, account_type in names:
+            normalized = name.strip().lower()
+            if not name.strip() or normalized in existing:
+                continue
+            try:
+                self.createAccount(name.strip(), account_type)
+                existing.add(normalized)
+            except Exception as error:  # noqa: BLE001 - account creation must not abort a transfer
+                logger.warning("Could not create account '%s': %s", name, error)
 
     def deleteAccount(self, account_id: str) -> requests.Response:
         """Delete an account on the Firefly III server.

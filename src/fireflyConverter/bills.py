@@ -38,8 +38,10 @@ SYSTEM_PROMPT = (
     "You extract structured data from a single invoice or receipt. "
     "Reply only with JSON matching the requested schema. Use ISO dates (YYYY-MM-DD). "
     "'total' is the gross amount to pay. Choose 'category' only from the provided list, "
-    "using the exact name, or null if none fits. Choose 'account' only from the provided list, "
-    "using the exact name, or null if none fits. Choose 'tags' only from the provided list. "
+    "using the exact name, or null if none fits. Choose 'account' from the provided list "
+    "using the exact name, or suggest a new account name if none fits; it will be created automatically. "
+    "Choose 'tags' only from the provided list. If multiple bills match one transaction, "
+    "each bill contributes its own category, tags and note. "
     "Set 'confidence' between 0 and 1 to reflect how certain the extraction is."
 )
 
@@ -344,8 +346,10 @@ def _buildUserPrompt(categories: List[str], tags: List[str], accounts: List[str]
         "Read the attached bill and return total, currency, date, vendor, category, "
         "account, tags, note and confidence.\n"
         f"Categories (choose exactly one name or null): {categoryList}\n"
-        f"Accounts (choose exactly one name or null): {accountList}\n"
-        f"Tags (choose zero or more names): {tagList}"
+        f"Accounts (choose an existing name or suggest a new name, or null): {accountList}\n"
+        f"Tags (choose zero or more names): {tagList}\n"
+        "You may suggest a new account name; it will be created automatically. "
+        "If multiple bills match one split transaction, each bill contributes its own category, tags and note."
     )
 
 

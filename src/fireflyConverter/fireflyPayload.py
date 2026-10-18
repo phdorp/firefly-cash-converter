@@ -1,7 +1,7 @@
 import math
 from typing import Any, Optional, Union, overload
 
-from fireflyConverter.data import BaseTransaction, PostAccount, PostRule, PostRuleGroup
+from fireflyConverter.data import BaseTransaction, PostAccount, PostRule, PostRuleGroup, TransactionSplit
 
 
 def _hasValue(value: Any) -> bool:
@@ -88,7 +88,9 @@ class PayloadFactory:
         Returns:
             dict[str, Any]: Transaction payload dictionary.
         """
-        return self.postTransaction(**transaction.__dict__, apply_rules=apply_rules)
+        values = dict(transaction.__dict__)
+        splits = values.pop("split_transactions", None)
+        return self.postTransaction(**values, splits=splits, apply_rules=apply_rules)
 
     def _toAccountPayload(self, account: PostAccount) -> dict[str, Any]:
         """Convert a PostAccount to an account payload.
@@ -168,6 +170,7 @@ class PayloadFactory:
         group_title: Optional[str] = None,
         apply_rules: bool = False,
         fire_webhooks: bool = True,
+        splits: Optional[list[TransactionSplit | dict[str, Any]]] = None,
     ) -> dict[str, Any]:
         """Build a transaction payload for the Firefly III API.
 
@@ -321,12 +324,27 @@ class PayloadFactory:
         if _hasValue(invoice_date):
             transaction["invoice_date"] = invoice_date
 
+        transactionEntries = [transaction]
+        if splits:
+            transactionEntries = [
+                self._splitPayload(
+                    split,
+                    type=type,
+                    date=date,
+                    description=description,
+                    source_name=source_name,
+                    destination_name=destination_name,
+                    order=index,
+                )
+                for index, split in enumerate(splits)
+            ]
+
         # Build the payload wrapper
         payload: dict[str, Any] = {
             "error_if_duplicate_hash": self._duplicate_transaction_check,
             "apply_rules": apply_rules,
             "fire_webhooks": fire_webhooks,
-            "transactions": [transaction],
+            "transactions": transactionEntries,
         }
 
         # Add optional group title
@@ -334,6 +352,41 @@ class PayloadFactory:
             payload["group_title"] = group_title
 
         return payload
+
+    def _splitPayload(
+        self,
+        split: TransactionSplit | dict[str, Any],
+        *,
+        type: str,
+        date: str,
+        description: str,
+        source_name: Optional[str],
+        destination_name: Optional[str],
+        order: int,
+    ) -> dict[str, Any]:
+        """Build one transaction entry from a split definition."""
+        values = split.__dict__ if isinstance(split, TransactionSplit) else split
+        amount = values.get("amount")
+        if amount is None:
+            raise ValueError("A split transaction entry must include an amount")
+
+        entry: dict[str, Any] = {
+            "type": type,
+            "date": date,
+            "amount": str(amount),
+            "description": description,
+            "order": order,
+        }
+        for key, value in (
+            ("source_name", values.get("source_name", source_name)),
+            ("destination_name", values.get("destination_name", destination_name)),
+            ("category_name", values.get("category_name")),
+            ("tags", values.get("tags")),
+            ("notes", values.get("notes")),
+        ):
+            if _hasValue(value):
+                entry[key] = value
+        return entry
 
     def postAccount(
         self,

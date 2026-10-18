@@ -73,6 +73,30 @@ class TestCreateTransactionRuleFlag(unittest.TestCase):
         self.assertFalse(self._sentPayload()["apply_rules"])
 
 
+class TestCreateSuggestedAccounts(unittest.TestCase):
+    def setUp(self):
+        self._interface = ffi.FireflyInterface(base_url="http://firefly.test", api_token="token")
+        self._interface._session = mock.Mock()
+        self._interface._session.post.return_value = mock.Mock(status_code=201)
+
+    def testCreateAccountAcceptsNameAndType(self):
+        self._interface.createAccount("Travel", "expense")
+
+        payload = self._interface._session.post.call_args.kwargs["json"]
+        self.assertEqual(payload["name"], "Travel")
+        self.assertEqual(payload["type"], "expense")
+
+    def testCreateAccountsSkipsExistingNames(self):
+        existing = mock.Mock()
+        existing.name = "Existing"
+        self._interface.getAccounts = mock.Mock(return_value=[existing])
+        self._interface.createAccount = mock.Mock()
+
+        self._interface.createAccounts([("Existing", "expense"), ("New", "income")])
+
+        self._interface.createAccount.assert_called_once_with("New", "income")
+
+
 def create_test_rules(rule_group_id: int, title_prefix: str = "Test") -> list:
     """Create a list of test rules for a given rule group.
 

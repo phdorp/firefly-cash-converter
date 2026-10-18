@@ -68,6 +68,18 @@ class TestPayloadFactory(unittest.TestCase):
         self.assertEqual(transaction["foreign_amount"], 42.5)
         self.assertEqual(transaction["notes"], "note")
 
+    def testSplitEntriesAreEmittedInsteadOfOneAggregateEntry(self):
+        payload = self._postTransaction(
+            splits=[
+                {"amount": 40.0, "category_name": "Food", "notes": "first"},
+                {"amount": 60.0, "category_name": "Books", "tags": ["bill-matched"]},
+            ]
+        )
+
+        self.assertEqual([entry["amount"] for entry in payload["transactions"]], ["40.0", "60.0"])
+        self.assertEqual(payload["transactions"][0]["category_name"], "Food")
+        self.assertEqual(payload["transactions"][1]["tags"], ["bill-matched"])
+
 
 class TestApplyRules(unittest.TestCase):
     def setUp(self) -> None:

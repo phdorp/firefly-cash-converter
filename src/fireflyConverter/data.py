@@ -8,6 +8,18 @@ class TransactionType(enum.Enum):
 
 
 @dc.dataclass
+class TransactionSplit:
+    """One split entry for a Firefly III transaction."""
+
+    amount: float | str
+    category_name: str | None = None
+    source_name: str | None = None
+    destination_name: str | None = None
+    tags: list[str] | None = None
+    notes: str | None = None
+
+
+@dc.dataclass
 class BaseTransaction:
     """Base transaction data class for financial transactions.
 
@@ -95,6 +107,7 @@ class BaseTransaction:
     due_date: str | None
     payment_date: str | None
     invoice_date: str | None
+    split_transactions: list[TransactionSplit] | None = None
 
 
 @dc.dataclass
@@ -550,6 +563,14 @@ class PostExpenseAccount(PostAccount):
     def __post_init__(self):
         # Lock down immutable account type for expense accounts
         object.__setattr__(self, "type", "expense")
+
+
+@dc.dataclass
+class PostIncomeAccount(PostAccount):
+    """Income account data class for posting to Firefly III."""
+
+    def __post_init__(self):
+        object.__setattr__(self, "type", "income")
 
 
 @dc.dataclass

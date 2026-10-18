@@ -6,6 +6,7 @@ import logging
 import os
 import re
 from difflib import SequenceMatcher
+from itertools import combinations
 from typing import List, Optional, Sequence, Set, Tuple
 
 from fireflyConverter import data
@@ -29,10 +30,14 @@ class MatchOutcome:
         status (str): One of ``matched``, ``no_total``, ``no_candidate``,
             ``ambiguous`` or ``already_matched``.
         transaction (data.BaseTransaction | None): The matched transaction, if any.
+        additional_bills (List[data.Bill]): Other bills contributing to a split.
+        overflow_bills (List[data.Bill]): Bills excluded because the split limit was reached.
     """
 
     status: str
     transaction: Optional[data.BaseTransaction] = None
+    additional_bills: List[data.Bill] = dc.field(default_factory=list)
+    overflow_bills: List[data.Bill] = dc.field(default_factory=list)
 
 
 def vendorSimilarity(left: str, right: str) -> float:
@@ -101,8 +106,13 @@ class BillMatcher:
         self._vendorThreshold = vendorThreshold
         self._claimed: Set[int] = set()
 
-    def match(self, bill: data.Bill) -> MatchOutcome:
-        """Find the single unclaimed transaction that belongs to a bill.
+    def match(
+        self,
+        bill: data.Bill,
+        additional_bills: Sequence[data.Bill] = (),
+        max_split_balls: int = 5,
+    ) -> MatchOutcome:
+        """Find the transaction that belongs to a bill, optionally as a split.
 
         Args:
             bill (data.Bill): The bill to match.
@@ -120,14 +130,104 @@ class BillMatcher:
             self._claimed.add(id(available[0]))
             return MatchOutcome(MATCHED, available[0])
         if len(available) > 1:
+            splitOutcome = self._matchSplit(bill, additional_bills, max_split_balls)
+            if splitOutcome is not None:
+                return splitOutcome
             return MatchOutcome(AMBIGUOUS)
+
+        splitOutcome = self._matchSplit(bill, additional_bills, max_split_balls)
+        if splitOutcome is not None:
+            return splitOutcome
         if candidates:
             return MatchOutcome(ALREADY_MATCHED)
         return MatchOutcome(NO_CANDIDATE)
 
+    def _matchSplit(
+        self,
+        bill: data.Bill,
+        additionalBills: Sequence[data.Bill],
+        maxSplitBills: int,
+    ) -> Optional[MatchOutcome]:
+        """Find an unclaimed transaction whose amount is covered by several bills."""
+        if bill.total is None or maxSplitBills < 2:
+            return None
+
+        availableTransactions = [transaction for transaction in self._transactions if id(transaction) not in self._claimed]
+        matches: List[Tuple[data.BaseTransaction, List[data.Bill], List[data.Bill]]] = []
+        for transaction in availableTransactions:
+            candidates = [
+                candidate
+                for candidate in [bill, *additionalBills]
+                if candidate.total is not None and self._isSplitCandidate(candidate, transaction)
+            ]
+            if bill not in candidates:
+                continue
+            if (
+                len(candidates) > maxSplitBills
+                and abs(
+                    sum(float(candidate.total) for candidate in candidates if candidate.total is not None)
+                    - float(transaction.amount)
+                )
+                <= self._amountTolerance
+            ):
+                return MatchOutcome(AMBIGUOUS, overflow_bills=candidates)
+            group = self._findBillGroup(candidates, transaction, maxSplitBills)
+            if group is not None:
+                matchingBills, overflowBills = group
+                if len(matchingBills) > 1:
+                    matches.append((transaction, matchingBills, overflowBills))
+
+        if len(matches) != 1:
+            return None
+
+        transaction, matchingBills, overflowBills = matches[0]
+        self._claimed.add(id(transaction))
+        primaryIndex = matchingBills.index(bill)
+        additional = matchingBills[:primaryIndex] + matchingBills[primaryIndex + 1 :]
+        return MatchOutcome(MATCHED, transaction, additional, overflowBills)
+
+    def _findBillGroup(
+        self,
+        candidates: Sequence[data.Bill],
+        transaction: data.BaseTransaction,
+        maxSplitBills: int,
+    ) -> Optional[Tuple[List[data.Bill], List[data.Bill]]]:
+        """Find a bill subset whose totals equal a transaction amount."""
+        if transaction.amount is None:
+            return None
+
+        uniqueCandidates: List[data.Bill] = []
+        seenIds: Set[int] = set()
+        for candidate in candidates:
+            if id(candidate) not in seenIds:
+                uniqueCandidates.append(candidate)
+                seenIds.add(id(candidate))
+        for size in range(2, min(maxSplitBills, len(uniqueCandidates)) + 1):
+            for groupTuple in combinations(uniqueCandidates, size):
+                total = sum(float(candidate.total) for candidate in groupTuple if candidate.total is not None)
+                if abs(total - float(transaction.amount)) <= self._amountTolerance:
+                    matched = list(groupTuple)
+                    overflow = [
+                        candidate
+                        for candidate in uniqueCandidates
+                        if candidate not in matched and candidate is not None
+                    ]
+                    return matched, overflow
+        return None
+
     def _isCandidate(self, bill: data.Bill, transaction: data.BaseTransaction) -> bool:
         """Return True if a transaction satisfies amount, date and vendor criteria."""
         if abs(float(transaction.amount) - bill.total) > self._amountTolerance:
+            return False
+        if not self._withinDateWindow(bill.date, transaction.date):
+            return False
+        return vendorSimilarity(bill.vendor or "", transaction.description or "") >= self._vendorThreshold
+
+    def _isSplitCandidate(self, bill: data.Bill, transaction: data.BaseTransaction) -> bool:
+        """Return True if a bill can contribute a positive part of a transaction."""
+        if bill.total is None or float(bill.total) <= 0:
+            return False
+        if float(bill.total) - float(transaction.amount) > self._amountTolerance:
             return False
         if not self._withinDateWindow(bill.date, transaction.date):
             return False
@@ -161,13 +261,15 @@ def applyBill(
     accounts: Sequence[str],
     markerTag: Optional[str] = "bill-matched",
     confidenceThreshold: float = 0.5,
+    additional_bills: Sequence[data.Bill] = (),
+    accountsEnabled: Optional[bool] = None,
+    amountTolerance: float = 0.0,
 ) -> List[str]:
     """Write bill-derived category, account, tags and notes onto a transaction.
 
-    The category, account and tags are restricted to the values that already
-    exist, a low-confidence extraction applies none of them, and an existing
-    counter-account is never overwritten. Notes and the marker tag are always
-    written so the enrichment remains traceable.
+    A low-confidence extraction applies none of the category, account or tags.
+    Existing counter-accounts are never overwritten. Additional bills are
+    represented as Firefly III split entries.
 
     Args:
         bill (data.Bill): The matched bill.
@@ -177,12 +279,16 @@ def applyBill(
         accounts (Sequence[str]): Existing Firefly III account names.
         markerTag (Optional[str]): Audit tag added to enriched transactions. Defaults to "bill-matched".
         confidenceThreshold (float): Minimum confidence to apply category, account and tags. Defaults to 0.5.
+        additional_bills (Sequence[data.Bill]): Other bills contributing to a split.
+        accountsEnabled (Optional[bool]): Whether unknown account names may be created.
+        amountTolerance (float): Allowed difference between split total and transaction amount.
 
     Returns:
         List[str]: Human-readable issues to include in the report.
     """
     issues: List[str] = []
     resolvedTags: List[str] = []
+    allowNewAccounts = bool(accounts) if accountsEnabled is None else accountsEnabled
 
     if bill.confidence < confidenceThreshold:
         issues.append(
@@ -195,7 +301,13 @@ def applyBill(
             issues.append(f"Category '{bill.category}' is not defined in Firefly III; left empty")
         transaction.category_name = category
 
-        issues.extend(_applyAccount(bill, transaction, accounts))
+        accountField = "source_name" if transaction.type == data.TransactionType.DEPOSIT.value else "destination_name"
+        existingAccount = getattr(transaction, accountField)
+        accountName, _ = _applyAccount(bill, transaction, accounts, allowNew=allowNewAccounts)
+        if existingAccount and accountName and _canonicalName(existingAccount, [accountName]) is None:
+            issues.append(f"Kept existing account '{existingAccount}'; bill suggested '{accountName}'")
+        if bill.account and accountName is None and accounts:
+            issues.append(f"Account '{bill.account}' could not be applied")
 
         resolvedTags, unknownTags = _canonicalTags(bill.tags, tags)
         for unknown in unknownTags:
@@ -206,10 +318,67 @@ def applyBill(
 
     transaction.tags = resolvedTags
     transaction.notes = _composeNotes(bill, transaction.notes)
+
+    if additional_bills:
+        splitTotal = sum(float(additional.total) for additional in [bill, *additional_bills] if additional.total is not None)
+        if abs(splitTotal - float(transaction.amount)) > amountTolerance:
+            issues.append(
+                f"Split bill total {splitTotal:.2f} does not match transaction amount "
+                f"{float(transaction.amount):.2f}; split was not applied"
+            )
+            return issues
+
+        splitTransactions: List[data.TransactionSplit] = []
+        primaryAmount = bill.total
+        if primaryAmount is not None:
+            splitTransactions.append(
+                data.TransactionSplit(
+                    amount=primaryAmount,
+                    category_name=transaction.category_name,
+                    source_name=transaction.source_name,
+                    destination_name=transaction.destination_name,
+                    tags=list(transaction.tags or []),
+                    notes=_composeNotes(bill, None),
+                )
+            )
+        for additional in additional_bills:
+            splitCategory: Optional[str] = None
+            splitTags: List[str] = []
+            if additional.confidence >= confidenceThreshold:
+                splitCategory = _canonicalName(additional.category, categories)
+                if additional.category and splitCategory is None:
+                    issues.append(
+                        f"Category '{additional.category}' is not defined in Firefly III; left empty"
+                    )
+                splitTags, unknownTags = _canonicalTags(additional.tags, tags)
+                for unknown in unknownTags:
+                    issues.append(f"Tag '{unknown}' is not defined in Firefly III; dropped")
+            else:
+                issues.append(
+                    f"Low confidence ({additional.confidence:.2f} < {confidenceThreshold}); "
+                    f"split fields left empty for {os.path.basename(additional.path)}"
+                )
+            if additional.total is not None:
+                splitTransactions.append(
+                    data.TransactionSplit(
+                        amount=additional.total,
+                        category_name=splitCategory,
+                        source_name=transaction.source_name,
+                        destination_name=transaction.destination_name,
+                        tags=splitTags + ([markerTag] if markerTag else []),
+                        notes=_composeNotes(additional, None),
+                    )
+                )
+        transaction.split_transactions = splitTransactions
     return issues
 
 
-def _applyAccount(bill: data.Bill, transaction: data.BaseTransaction, accounts: Sequence[str]) -> List[str]:
+def _applyAccount(
+    bill: data.Bill,
+    transaction: data.BaseTransaction,
+    accounts: Sequence[str],
+    allowNew: bool = True,
+) -> Tuple[Optional[str], Optional[str]]:
     """Set the bill's counter-account on the transaction unless one is already set.
 
     An empty account vocabulary means the mapping is off, or that Firefly III
@@ -222,19 +391,28 @@ def _applyAccount(bill: data.Bill, transaction: data.BaseTransaction, accounts: 
         accounts (Sequence[str]): Existing Firefly III account names.
 
     Returns:
-        List[str]: Human-readable issues to include in the report.
+        Tuple[Optional[str], Optional[str]]: Account name and inferred Firefly type.
     """
+    if not bill.account or not accounts and not allowNew:
+        return None, None
+
     account = _canonicalName(bill.account, accounts)
+    if account is None and allowNew:
+        account = bill.account.strip()
     if account is None:
-        if bill.account and accounts:
-            return [f"Account '{bill.account}' is not defined in Firefly III; left empty"]
-        return []
-    if transaction.destination_name:
-        if _canonicalName(transaction.destination_name, [account]) is not None:
-            return []
-        return [f"Kept existing account '{transaction.destination_name}'; bill suggested '{account}'"]
-    transaction.destination_name = account
-    return []
+        return None, None
+
+    accountField = "source_name" if transaction.type == data.TransactionType.DEPOSIT.value else "destination_name"
+    existingAccount = getattr(transaction, accountField)
+    if existingAccount:
+        return account, _accountType(transaction)
+    setattr(transaction, accountField, account)
+    return account, _accountType(transaction)
+
+
+def _accountType(transaction: data.BaseTransaction) -> str:
+    """Infer the Firefly account type for a bill counter-account."""
+    return "income" if transaction.type == data.TransactionType.DEPOSIT.value else "expense"
 
 
 def _canonicalName(name: Optional[str], candidates: Sequence[str]) -> Optional[str]:

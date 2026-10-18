@@ -208,6 +208,13 @@ class TestBuildBillMessages(unittest.TestCase):
         userContent = messages[1]["content"]
         self.assertIn("Restaurants", userContent)
 
+    def testPromptAllowsNewAccountsAndSplitContributions(self):
+        messages = bills.buildBillMessages(bills.BillContent(text="Total 12,34 EUR"), [], [], [])
+
+        userContent = messages[1]["content"]
+        self.assertIn("suggest a new account name", userContent)
+        self.assertIn("split transaction", userContent)
+
     def testImageContentAttachesImageUrl(self):
         content = bills.BillContent(imageDataUri="data:image/png;base64,AAAA")
 

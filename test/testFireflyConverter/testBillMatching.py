@@ -181,14 +181,14 @@ class TestApplyBill(unittest.TestCase):
         self.assertEqual(transaction.destination_name, "Restaurants")
         self.assertEqual(issues, [])
 
-    def testUnknownAccountIsDroppedAndReported(self):
+    def testUnknownAccountIsAcceptedForCreation(self):
         transaction = _tx(12.34, "2026-10-01", "ACME GmbH")
         bill = _bill(account="Travel", confidence=0.9)
 
         issues = bm.applyBill(bill, transaction, categories=[], tags=[], accounts=["Groceries"])
 
-        self.assertIsNone(transaction.destination_name)
-        self.assertTrue(any("Travel" in issue for issue in issues))
+        self.assertEqual(transaction.destination_name, "Travel")
+        self.assertEqual(issues, [])
 
     def testNoAccountVocabularyLeavesTheTransactionAlone(self):
         transaction = _tx(12.34, "2026-10-01", "ACME GmbH")
@@ -219,6 +219,36 @@ class TestApplyBill(unittest.TestCase):
 
         self.assertIsNone(transaction.destination_name)
         self.assertTrue(any("confidence" in issue.lower() for issue in issues))
+
+    def testMatchesBillsAsASplitWhenTheirTotalsAddUp(self):
+        transaction = _tx(10.0, "2026-10-01", "Shop")
+        first = _bill(path="/bills/one.pdf", total=4.0, date="2026-10-01", vendor="Shop")
+        second = _bill(path="/bills/two.pdf", total=6.0, date="2026-10-01", vendor="Shop")
+
+        outcome = bm.BillMatcher([transaction]).match(first, [second])
+
+        self.assertEqual(outcome.status, bm.MATCHED)
+        self.assertIs(outcome.transaction, transaction)
+        self.assertEqual(outcome.additional_bills, [second])
+
+    def testSplitEntriesKeepTheirOwnCategoriesAndNotes(self):
+        transaction = _tx(10.0, "2026-10-01", "Shop")
+        first = _bill(total=4.0, category="Food", note="meal", date="2026-10-01", vendor="Shop", confidence=0.9)
+        second = _bill(total=6.0, category="Books", note="book", date="2026-10-01", vendor="Shop", confidence=0.9)
+
+        bm.applyBill(
+            first,
+            transaction,
+            categories=["Food", "Books"],
+            tags=[],
+            accounts=[],
+            additional_bills=[second],
+        )
+
+        self.assertEqual([split.amount for split in transaction.split_transactions], [4.0, 6.0])
+        self.assertEqual([split.category_name for split in transaction.split_transactions], ["Food", "Books"])
+        self.assertIn("meal", transaction.split_transactions[0].notes)
+        self.assertIn("book", transaction.split_transactions[1].notes)
 
 
 if __name__ == "__main__":

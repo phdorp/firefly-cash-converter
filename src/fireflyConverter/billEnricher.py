@@ -31,6 +31,7 @@ class BillConfig:
         vision (bool): Whether scanned bills may be rasterized for the vision model.
         max_pages (int): Number of PDF pages considered for text extraction.
         accounts (bool): Whether bills may also set the transaction's counter-account.
+        max_split_balls (int): Maximum number of bills allowed in one split transaction.
     """
 
     directory: str
@@ -45,6 +46,7 @@ class BillConfig:
     vision: bool = True
     max_pages: int = 1
     accounts: bool = True
+    max_split_balls: int = 5
 
 
 @dc.dataclass
@@ -58,6 +60,7 @@ class MatchRecord:
         account (str | None): Counter-account written onto the transaction.
         tags (List[str]): Tags written onto the transaction.
         llm_response (str | None): Raw LLM response for verbose reporting.
+        additional_bills (List[data.Bill]): Other bills contributing to a split.
     """
 
     bill_path: str
@@ -66,6 +69,7 @@ class MatchRecord:
     tags: List[str]
     account: Optional[str] = None
     llm_response: Optional[str] = None
+    additional_bills: List[data.Bill] = dc.field(default_factory=list)
 
 
 @dc.dataclass
@@ -80,6 +84,7 @@ class EnrichmentReport:
         duplicates (List[str]): Bills whose only candidate transaction was claimed by another bill.
         errors (List[str]): Bills that could not be read or parsed.
         issues (List[str]): Non-fatal warnings from applying bills.
+        new_accounts (List[tuple[str, str]]): Account names and types suggested by bills.
     """
 
     matched: List[MatchRecord] = dc.field(default_factory=list)
@@ -89,6 +94,23 @@ class EnrichmentReport:
     duplicates: List[str] = dc.field(default_factory=list)
     errors: List[str] = dc.field(default_factory=list)
     issues: List[str] = dc.field(default_factory=list)
+    new_accounts: List[tuple[str, str]] = dc.field(default_factory=list)
+
+    def __iter__(self):
+        """Allow backwards-compatible report use and tuple unpacking."""
+        yield self
+        yield self.new_accounts
+
+    def __getitem__(self, index: int):
+        """Expose tuple-style access for callers adopting the new return shape."""
+        if index == 0:
+            return self
+        if index == 1:
+            return self.new_accounts
+        raise IndexError(index)
+
+    def __len__(self) -> int:
+        return 2
 
 
 class BillEnricher:
@@ -147,6 +169,7 @@ class BillEnricher:
 
         billPaths = bills.discoverBills(self._config.directory)
         logger.info(f"Found {len(billPaths)} bill(s) in {self._config.directory}")
+        loadedBills: List[data.Bill] = []
         for path in billPaths:
             try:
                 bill = self._reader.read(path)
@@ -154,9 +177,26 @@ class BillEnricher:
                 logger.warning(f"Failed to read bill {path}: {error}")
                 report.errors.append(f"{path}: {error}")
                 continue
+            loadedBills.append(bill)
 
-            outcome = matcher.match(bill)
+        consumedPaths: set[str] = set()
+        for index, bill in enumerate(loadedBills):
+            if bill.path in consumedPaths:
+                continue
+
+            outcome = matcher.match(
+                bill,
+                additional_bills=[
+                    candidate
+                    for candidate in loadedBills[index + 1 :]
+                    if candidate.path not in consumedPaths
+                ],
+                max_split_balls=self._config.max_split_balls,
+            )
             if outcome.status == bm.MATCHED:
+                if outcome.transaction is None:
+                    report.errors.append(f"{bill.path}: matcher returned a match without a transaction")
+                    continue
                 issues = bm.applyBill(
                     bill,
                     outcome.transaction,
@@ -165,25 +205,63 @@ class BillEnricher:
                     self._accounts,
                     markerTag=self._config.marker_tag,
                     confidenceThreshold=self._config.confidence_threshold,
+                    additional_bills=outcome.additional_bills,
+                    accountsEnabled=self._config.accounts,
+                    amountTolerance=self._config.amount_tolerance,
                 )
-                report.issues.extend(f"{os.path.basename(path)}: {issue}" for issue in issues)
+                report.issues.extend(f"{os.path.basename(bill.path)}: {issue}" for issue in issues)
+                consumedPaths.update(additional.path for additional in outcome.additional_bills)
+                consumedPaths.update(overflow.path for overflow in outcome.overflow_bills)
+                if outcome.overflow_bills:
+                    report.ambiguous.extend(overflow.path for overflow in outcome.overflow_bills)
+                    report.issues.append(
+                        f"{os.path.basename(bill.path)}: split exceeds the maximum of "
+                        f"{self._config.max_split_balls} bills; extra bills were not applied"
+                    )
+
+                accountField = (
+                    "source_name"
+                    if outcome.transaction.type == data.TransactionType.DEPOSIT.value
+                    else "destination_name"
+                )
+                chosenAccount = getattr(outcome.transaction, accountField)
+                if (
+                    self._config.accounts
+                    and bill.account
+                    and chosenAccount
+                    and bm._canonicalName(bill.account, self._accounts) is None
+                    and bm._canonicalName(chosenAccount, [bill.account]) is not None
+                ):
+                    accountType = bm._accountType(outcome.transaction)
+                    account = (chosenAccount, accountType)
+                    if account not in report.new_accounts:
+                        report.new_accounts.append(account)
+
                 report.matched.append(
                     MatchRecord(
-                        bill_path=path,
+                        bill_path=bill.path,
                         description=outcome.transaction.description,
                         category=outcome.transaction.category_name,
-                        account=outcome.transaction.destination_name,
+                        account=getattr(outcome.transaction, accountField),
                         tags=list(outcome.transaction.tags or []),
                         llm_response=bill.llm_response,
+                        additional_bills=list(outcome.additional_bills),
                     )
                 )
                 report.matched_transactions.append(outcome.transaction)
             elif outcome.status == bm.AMBIGUOUS:
-                report.ambiguous.append(path)
+                ambiguousPaths = [candidate.path for candidate in outcome.overflow_bills] or [bill.path]
+                report.ambiguous.extend(path for path in ambiguousPaths if path not in report.ambiguous)
+                if outcome.overflow_bills:
+                    consumedPaths.update(ambiguousPaths)
+                    report.issues.append(
+                        f"{os.path.basename(bill.path)}: more than {self._config.max_split_balls} "
+                        "bills match the transaction; split was not applied"
+                    )
             elif outcome.status == bm.ALREADY_MATCHED:
-                report.duplicates.append(path)
+                report.duplicates.append(bill.path)
             else:
-                report.unmatched.append(path)
+                report.unmatched.append(bill.path)
 
         return report
 
@@ -252,6 +330,9 @@ def renderReport(report: EnrichmentReport, verbose: bool = False) -> str:
                 f"category: {record.category or '-'} | account: {record.account or '-'} | "
                 f"tags: {', '.join(record.tags) or '-'}"
             )
+            if record.additional_bills:
+                splitPaths = ", ".join(os.path.basename(bill.path) for bill in record.additional_bills)
+                parts += f" | split bills: {splitPaths}"
             if verbose and record.llm_response:
                 parts += f" | LLM: {record.llm_response}"
             lines.append(parts)
@@ -286,6 +367,12 @@ def renderReport(report: EnrichmentReport, verbose: bool = False) -> str:
     lines.append("## Warnings")
     lines.extend(f"- {issue}" for issue in report.issues)
     if not report.issues:
+        lines.append("- (none)")
+
+    lines.append("")
+    lines.append("## New accounts")
+    lines.extend(f"- {name} ({account_type})" for name, account_type in report.new_accounts)
+    if not report.new_accounts:
         lines.append("- (none)")
 
     lines.append("")
