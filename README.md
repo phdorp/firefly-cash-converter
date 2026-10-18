@@ -158,7 +158,34 @@ You can provide few-shot bill examples outside the settings file with `prompt_ex
 prompt_examples_directory = "./bill-examples"
 ```
 
-Each `*.json` file in that directory must contain an `input` path (relative to the examples directory) and a `response` object matching the bill response schema. The input may be a `.txt`/`.md` bill description, PDF, or supported image. Example response objects may include `splits`, but cannot exceed `max_split_balls`; all examples are included in every bill prompt.
+Create `positive/` and `negative/` subdirectories. Each `*.json` file must contain an `input` path (relative to its positive/negative directory) and a `response` object. Positive examples show the desired extraction; negative examples show an extraction pattern the model should avoid. The input may be a `.txt`/`.md` bill description, PDF, or supported image. All examples are included in every bill prompt.
+
+The `response` object uses this format:
+
+```json
+{
+  "total": 12.0,
+  "currency": "EUR",
+  "date": "2026-10-01",
+  "vendor": "Example Market",
+  "category": "Groceries",
+  "account": null,
+  "tags": ["business"],
+  "note": "Example receipt",
+  "confidence": 0.95,
+  "splits": [
+    {
+      "amount": 7.0,
+      "category": "Groceries",
+      "tags": ["business"],
+      "note": "Food",
+      "confidence": 0.9
+    }
+  ]
+}
+```
+
+`total`, `date`, `vendor`, `category`, `account`, `tags`, `note`, and `confidence` are required. `splits` is optional and may contain at most `max_split_balls` entries; each split has `amount`, `category`, `tags`, `note`, and `confidence`.
 
 ```json
 {

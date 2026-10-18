@@ -39,8 +39,8 @@ accounts = true
 account_types = ["expense"]
 # maximum bills contributing to one transaction
 max_split_balls = 5
-# optional directory of JSON few-shot examples; each file references a .txt,
-# .md, PDF or image bill and contains its expected response object
+# optional directory of JSON few-shot examples with positive/ and negative/
+# subdirectories; each file references a .txt, .md, PDF or image bill
 # prompt_examples_directory = "./bill-examples"
 
 # Local OpenAI-compatible LLM (e.g. llama-server from llama.cpp).

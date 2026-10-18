@@ -253,8 +253,11 @@ class TestBuildBillMessages(unittest.TestCase):
 
     def testLoadsTextAndImagePromptExamples(self):
         with tempfile.TemporaryDirectory() as directory:
-            _write(directory, "text.txt", "Coffee 4.00 EUR")
-            _writeBytes(directory, "photo.png", _TINY_PNG)
+            positiveDirectory = os.path.join(directory, "positive")
+            negativeDirectory = os.path.join(directory, "negative")
+            _write(positiveDirectory, "text.txt", "Coffee 4.00 EUR")
+            os.makedirs(negativeDirectory)
+            _writeBytes(negativeDirectory, "photo.png", _TINY_PNG)
             response = {
                 "total": 4.0,
                 "date": "2026-10-01",
@@ -265,8 +268,11 @@ class TestBuildBillMessages(unittest.TestCase):
                 "note": "Coffee",
                 "confidence": 0.9,
             }
-            for name, inputName in (("text.json", "text.txt"), ("photo.json", "photo.png")):
-                with open(os.path.join(directory, name), "w", encoding="utf-8") as handle:
+            for exampleDirectory, name, inputName in (
+                (positiveDirectory, "text.json", "text.txt"),
+                (negativeDirectory, "photo.json", "photo.png"),
+            ):
+                with open(os.path.join(exampleDirectory, name), "w", encoding="utf-8") as handle:
                     json.dump({"input": inputName, "response": response}, handle)
 
             examples = bills.loadPromptExamples(directory, maxSplits=2)
@@ -280,6 +286,7 @@ class TestBuildBillMessages(unittest.TestCase):
             )
 
         self.assertEqual(len(examples), 2)
+        self.assertEqual({example.kind for example in examples}, {"positive", "negative"})
         self.assertIsInstance(messages[1]["content"], list)
         self.assertTrue(
             any('"vendor": "Cafe"' in part.get("text", "") for part in messages[1]["content"])
@@ -291,7 +298,8 @@ class TestBuildBillMessages(unittest.TestCase):
 
     def testRejectsExampleWithTooManySplits(self):
         with tempfile.TemporaryDirectory() as directory:
-            _write(directory, "bill.txt", "Mixed bill")
+            positiveDirectory = os.path.join(directory, "positive")
+            _write(positiveDirectory, "bill.txt", "Mixed bill")
             response = {
                 "total": 4.0,
                 "date": "2026-10-01",
@@ -303,7 +311,7 @@ class TestBuildBillMessages(unittest.TestCase):
                 "confidence": 0.9,
                 "splits": [{}, {}, {}],
             }
-            with open(os.path.join(directory, "example.json"), "w", encoding="utf-8") as handle:
+            with open(os.path.join(positiveDirectory, "example.json"), "w", encoding="utf-8") as handle:
                 json.dump({"input": "bill.txt", "response": response}, handle)
 
             with self.assertRaises(bills.BillExtractionError):

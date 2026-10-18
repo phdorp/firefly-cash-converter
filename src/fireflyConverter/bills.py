@@ -48,6 +48,7 @@ SYSTEM_PROMPT = (
     "Prefer the fewest splits possible: do not split when one allocation is sufficient, "
     "and combine positions that have the same suitable category and tags. "
     "Never return more split entries than the configured maximum. "
+    "Positive examples show desired behavior; negative examples show behavior to avoid. "
     "Set 'confidence' between 0 and 1 to reflect how certain the extraction is."
 )
 
@@ -110,6 +111,7 @@ class PromptExample:
     """One bill input and its expected structured response."""
 
     name: str
+    kind: str
     content: BillContent
     response: Dict[str, Any]
 
@@ -122,28 +124,32 @@ def loadPromptExamples(directory: str | None, maxSplits: int = 5) -> List[Prompt
         raise BillExtractionError(f"Prompt examples directory does not exist: {directory}")
 
     examples: List[PromptExample] = []
-    for metadataPath in sorted(discoverBills(directory, (EXAMPLE_METADATA_EXTENSION,))):
-        try:
-            with open(metadataPath, encoding="utf-8") as handle:
-                metadata = json.load(handle)
-            inputPath = metadata["input"]
-            response = metadata["response"]
-            if not isinstance(inputPath, str) or not isinstance(response, dict):
-                raise ValueError("'input' must be a string and 'response' must be an object")
-            if any(field not in response for field in BILL_RESPONSE_SCHEMA["required"]):
-                raise ValueError("response is missing a required bill field")
-            rawSplits = response.get("splits", [])
-            if not isinstance(rawSplits, list) or len(rawSplits) > maxSplits:
-                raise ValueError(f"response must contain at most {maxSplits} split entries")
-            inputFile = os.path.join(directory, inputPath)
-            if os.path.splitext(inputFile)[1].lower() in (".txt", ".md"):
-                with open(inputFile, encoding="utf-8") as handle:
-                    content = BillContent(text=handle.read())
-            else:
-                content = readBillContent(inputFile)
-            examples.append(PromptExample(os.path.basename(metadataPath), content, response))
-        except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError, BillExtractionError) as error:
-            raise BillExtractionError(f"Invalid prompt example {metadataPath}: {error}") from error
+    for kind in ("positive", "negative"):
+        kindDirectory = os.path.join(directory, kind)
+        if not os.path.isdir(kindDirectory):
+            continue
+        for metadataPath in sorted(discoverBills(kindDirectory, (EXAMPLE_METADATA_EXTENSION,))):
+            try:
+                with open(metadataPath, encoding="utf-8") as handle:
+                    metadata = json.load(handle)
+                inputPath = metadata["input"]
+                response = metadata["response"]
+                if not isinstance(inputPath, str) or not isinstance(response, dict):
+                    raise ValueError("'input' must be a string and 'response' must be an object")
+                if any(field not in response for field in BILL_RESPONSE_SCHEMA["required"]):
+                    raise ValueError("response is missing a required bill field")
+                rawSplits = response.get("splits", [])
+                if not isinstance(rawSplits, list) or len(rawSplits) > maxSplits:
+                    raise ValueError(f"response must contain at most {maxSplits} split entries")
+                inputFile = os.path.join(kindDirectory, inputPath)
+                if os.path.splitext(inputFile)[1].lower() in (".txt", ".md"):
+                    with open(inputFile, encoding="utf-8") as handle:
+                        content = BillContent(text=handle.read())
+                else:
+                    content = readBillContent(inputFile)
+                examples.append(PromptExample(os.path.basename(metadataPath), kind, content, response))
+            except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError, BillExtractionError) as error:
+                raise BillExtractionError(f"Invalid {kind} prompt example {metadataPath}: {error}") from error
     return examples
 
 
@@ -451,9 +457,13 @@ def _buildUserPrompt(categories: List[str], tags: List[str], accounts: List[str]
 
 def _renderExampleText(examples: List[PromptExample]) -> str:
     """Render text portions of few-shot examples."""
-    parts = ["\n\nExamples of bill extractions:"]
+    parts = ["\n\nExamples of bill extractions (positive examples are desired; negative examples are to be avoided):"]
     for index, example in enumerate(examples, start=1):
-        parts.append(f"\nExample {index} ({example.name}) expected response:\n{json.dumps(example.response, ensure_ascii=False)}")
+        label = "desired positive" if example.kind == "positive" else "negative to avoid"
+        parts.append(
+            f"\nExample {index} ({label}, {example.name}) response:\n"
+            f"{json.dumps(example.response, ensure_ascii=False)}"
+        )
         if example.content.text is not None:
             parts.append(f"Example {index} bill text:\n\"\"\"\n{example.content.text}\n\"\"\"")
         else:
@@ -477,11 +487,12 @@ def _buildMultimodalUserContent(
     """Build user content parts for examples and the current bill."""
     parts: List[Dict[str, Any]] = [{"type": "text", "text": prompt}]
     for index, example in enumerate(examples, start=1):
+        label = "desired positive" if example.kind == "positive" else "negative to avoid"
         parts.append(
             {
                 "type": "text",
                 "text": (
-                    f"\nExample {index} ({example.name}) expected response:\n"
+                    f"\nExample {index} ({label}, {example.name}) response:\n"
                     f"{json.dumps(example.response, ensure_ascii=False)}"
                 ),
             }
