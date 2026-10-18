@@ -90,7 +90,7 @@ class FireflyInterface:
             }
         )
 
-    def _postTransaction(self, transaction: data.BaseTransaction) -> requests.Response:
+    def _postTransaction(self, transaction: data.BaseTransaction, apply_rules: bool = False) -> requests.Response:
         """Post a transaction to the Firefly III API with error handling.
 
         Sends a transaction to the API and handles duplicate transaction detection
@@ -98,6 +98,8 @@ class FireflyInterface:
 
         Args:
             transaction (data.BaseTransaction): The transaction to post.
+            apply_rules (bool): Whether Firefly III should run its rules on the
+                created transaction. Defaults to False.
 
         Returns:
             requests.Response: The HTTP response from the API.
@@ -107,7 +109,7 @@ class FireflyInterface:
             requests.HTTPError: If the HTTP request fails with a non-422 status code.
         """
         logger.debug(f"Creating transaction: {transaction.description} (amount: {transaction.amount})")
-        payload = self._payloadFactory.toPayload(transaction)
+        payload = self._payloadFactory.toPayload(transaction, apply_rules=apply_rules)
         url = f"{self._api_url}/transactions"
         resp = self._session.post(url, json=payload)
 
@@ -306,7 +308,7 @@ class FireflyInterface:
         resp.raise_for_status()
         return resp
 
-    def createTransaction(self, transaction: data.BaseTransaction) -> requests.Response:
+    def createTransaction(self, transaction: data.BaseTransaction, apply_rules: bool = False) -> requests.Response:
         """Create a single transaction on the Firefly III server.
 
         Posts a transaction to the Firefly III API. Handles duplicate transaction
@@ -314,6 +316,8 @@ class FireflyInterface:
 
         Args:
             transaction (data.BaseTransaction): The transaction to create.
+            apply_rules (bool): Whether Firefly III should run its rules on the
+                created transaction. Defaults to False.
 
         Returns:
             requests.Response: The HTTP response from the Firefly API.
@@ -323,7 +327,7 @@ class FireflyInterface:
                 is not set to IGNORE.
             requests.HTTPError: If the HTTP request fails with a non-422 status code.
         """
-        return self._postTransaction(transaction)
+        return self._postTransaction(transaction, apply_rules=apply_rules)
 
     def getTransactions(
         self,

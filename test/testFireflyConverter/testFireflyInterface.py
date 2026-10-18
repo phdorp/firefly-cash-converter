@@ -1,12 +1,39 @@
 import os
 import unittest
 from typing import Set
+from unittest import mock
 
 import requests
 
 from fireflyConverter import data
 from fireflyConverter import fireflyInterface as ffi
 from fireflyConverter import loadData as ldb
+
+
+class TestCreateTransactionRuleFlag(unittest.TestCase):
+    """Offline test that the per-transaction rule flag reaches the request payload."""
+
+    def setUp(self) -> None:
+        self._interface = ffi.FireflyInterface(base_url="http://firefly.test", api_token="token")
+        self._interface._session = mock.Mock()
+        self._interface._session.post.return_value = mock.Mock(status_code=200)
+        self._transaction = data.PostTransaction(
+            date="2025-01-01", amount=1.0, description="coffee", type="withdrawal"
+        )
+
+    def _sentPayload(self) -> dict:
+        self._interface.createTransaction(self._transaction)
+        return self._interface._session.post.call_args.kwargs["json"]
+
+    def testApplyRulesIsSentToTheApi(self):
+        self._interface._session.post.reset_mock()
+
+        self._interface.createTransaction(self._transaction, apply_rules=True)
+
+        self.assertTrue(self._interface._session.post.call_args.kwargs["json"]["apply_rules"])
+
+    def testApplyRulesIsOffByDefault(self):
+        self.assertFalse(self._sentPayload()["apply_rules"])
 
 
 def create_test_rules(rule_group_id: int, title_prefix: str = "Test") -> list:

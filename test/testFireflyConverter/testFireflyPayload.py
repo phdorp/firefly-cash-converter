@@ -1,7 +1,15 @@
 import json
 import unittest
 
+from fireflyConverter import data
 from fireflyConverter.fireflyPayload import PayloadFactory
+
+
+def _tx(**overrides):
+    """Build a postable transaction with only the required fields set."""
+    values = {"date": "2025-01-01", "amount": 10.0, "description": "test", "type": "withdrawal"}
+    values.update(overrides)
+    return data.PostTransaction(**values)
 
 
 class TestPayloadFactory(unittest.TestCase):
@@ -59,6 +67,21 @@ class TestPayloadFactory(unittest.TestCase):
         self.assertEqual(transaction["source_name"], "account")
         self.assertEqual(transaction["foreign_amount"], 42.5)
         self.assertEqual(transaction["notes"], "note")
+
+
+class TestApplyRules(unittest.TestCase):
+    def setUp(self) -> None:
+        self._factory = PayloadFactory()
+
+    def testApplyRulesDefaultsToOff(self):
+        payload = self._factory.toPayload(_tx())
+
+        self.assertFalse(payload["apply_rules"])
+
+    def testApplyRulesIsThreadedThroughToPayload(self):
+        payload = self._factory.toPayload(_tx(), apply_rules=True)
+
+        self.assertTrue(payload["apply_rules"])
 
 
 if __name__ == "__main__":

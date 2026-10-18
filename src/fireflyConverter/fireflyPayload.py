@@ -32,7 +32,7 @@ class PayloadFactory:
         self._duplicate_transaction_check = duplicate_transaction_check
 
     @overload
-    def toPayload(self, data: BaseTransaction) -> dict[str, Any]:
+    def toPayload(self, data: BaseTransaction, apply_rules: bool = False) -> dict[str, Any]:
         """Convert a BaseTransaction to a payload dictionary."""
 
     @overload
@@ -47,7 +47,9 @@ class PayloadFactory:
     def toPayload(self, data: PostRuleGroup) -> dict[str, Any]:
         """Convert a PostRuleGroup to a payload dictionary."""
 
-    def toPayload(self, data: Union[BaseTransaction, PostAccount, PostRule, PostRuleGroup]) -> dict[str, Any]:
+    def toPayload(
+        self, data: Union[BaseTransaction, PostAccount, PostRule, PostRuleGroup], apply_rules: bool = False
+    ) -> dict[str, Any]:
         """Convert transaction, account, rule, or rule group data to a payload dictionary.
 
         Routes the conversion based on the input data type to the appropriate
@@ -55,6 +57,8 @@ class PayloadFactory:
 
         Args:
             data (Union[BaseTransaction, PostAccount, PostRule, PostRuleGroup]): The data object to convert.
+            apply_rules (bool): Whether Firefly III should run its rules on the
+                created transaction. Only used for transactions. Defaults to False.
 
         Returns:
             dict[str, Any]: API-compatible payload dictionary.
@@ -65,7 +69,7 @@ class PayloadFactory:
         if isinstance(data, PostAccount):
             return self._toAccountPayload(data)
         elif isinstance(data, BaseTransaction):
-            return self._toTransactionPayload(data)
+            return self._toTransactionPayload(data, apply_rules)
         elif isinstance(data, PostRule):
             return self._toRulePayload(data)
         elif isinstance(data, PostRuleGroup):
@@ -73,16 +77,18 @@ class PayloadFactory:
         else:
             raise TypeError(f"Unsupported data type for payload conversion: {type(data)}")
 
-    def _toTransactionPayload(self, transaction: BaseTransaction) -> dict[str, Any]:
+    def _toTransactionPayload(self, transaction: BaseTransaction, apply_rules: bool = False) -> dict[str, Any]:
         """Convert a BaseTransaction to a transaction payload.
 
         Args:
             transaction (BaseTransaction): The transaction to convert.
+            apply_rules (bool): Whether Firefly III should run its rules on the
+                created transaction. Defaults to False.
 
         Returns:
             dict[str, Any]: Transaction payload dictionary.
         """
-        return self.postTransaction(**transaction.__dict__)
+        return self.postTransaction(**transaction.__dict__, apply_rules=apply_rules)
 
     def _toAccountPayload(self, account: PostAccount) -> dict[str, Any]:
         """Convert a PostAccount to an account payload.
