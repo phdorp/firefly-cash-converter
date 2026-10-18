@@ -259,9 +259,11 @@ class BillEnricher:
         target = os.path.join(self._config.directory, self._config.processed_subdir)
         os.makedirs(target, exist_ok=True)
         for record in report.matched:
-            destination = _uniqueTarget(target, os.path.basename(record.bill_path))
-            logger.info(f"Archiving bill: {record.bill_path} -> {destination}")
-            shutil.move(record.bill_path, destination)
+            billPaths = [record.bill_path, *(bill.path for bill in record.additional_bills)]
+            for billPath in billPaths:
+                destination = _uniqueTarget(target, os.path.basename(billPath))
+                logger.info(f"Archiving bill: {billPath} -> {destination}")
+                shutil.move(billPath, destination)
 
 
 def _uniqueTarget(directory: str, filename: str) -> str:
