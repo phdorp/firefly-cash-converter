@@ -244,7 +244,7 @@ def transfer(arguments: Namespace):
         _tagAutoLabeled(transaction, applyRules, autoLabeled)
         response = interface.createTransaction(transaction, apply_rules=applyRules)
         billPaths = matchedBillPaths.get(id(transaction), [])
-        if billPaths:
+        if billPaths and response.status_code != 422:
             journalId = _transactionJournalId(response)
             for billPath in billPaths:
                 with bls.prepareBillUpload(billPath) as (uploadPath, filename):
