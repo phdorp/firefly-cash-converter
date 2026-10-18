@@ -149,6 +149,8 @@ Categories, tags and bill counter-accounts must already exist in Firefly III. By
 
 Multiple bills may cover one transaction when their totals add up to the transaction amount. Each bill becomes a split entry with its own category, tags and note. The split limit is five bills by default; additional matches are reported as ambiguous.
 
+For a single bill, the LLM may also split distinct bill positions into separate transaction entries when that gives a materially better match to the available categories or tags. It prefers the fewest entries possible and combines positions with the same suitable classification.
+
 The counter-account is only filled when the transaction does not already carry one; an existing account is kept and the ignored suggestion is reported. Set `accounts = false` in the `[bills]` section to leave accounts untouched.
 
 You need a local model served over an OpenAI-compatible API (for example `llama-server` from llama.cpp). Scanned bills are sent to the model as images, so the model must support vision for photos; digital PDFs are read from their text layer.
