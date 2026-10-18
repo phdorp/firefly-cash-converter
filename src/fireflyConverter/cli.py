@@ -375,8 +375,9 @@ def _matchedBillPaths(report: Optional[bce.EnrichmentReport]) -> dict[int, list[
 def _transactionJournalId(response) -> str:
     """Extract the Firefly transaction journal ID from a create response."""
     try:
-        journalId = response.json()["data"]["id"]
-    except (AttributeError, KeyError, TypeError, ValueError) as error:
+        splits = response.json()["data"]["attributes"]["transactions"]
+        journalId = splits[0]["transaction_journal_id"]
+    except (AttributeError, IndexError, KeyError, TypeError, ValueError) as error:
         raise ValueError("Firefly III did not return a transaction journal ID") from error
     if journalId is None or not str(journalId).strip():
         raise ValueError("Firefly III returned an empty transaction journal ID")

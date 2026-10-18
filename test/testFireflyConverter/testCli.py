@@ -425,6 +425,19 @@ class TestBillAccountPool(unittest.TestCase):
         self.assertEqual(accounts, ["Groceries"])
 
 
+class TestTransactionJournalId(unittest.TestCase):
+    def testExtractsJournalIdFromTransactionSplit(self):
+        response = mock.Mock()
+        response.json.return_value = {
+            "data": {
+                "id": "transaction-group",
+                "attributes": {"transactions": [{"transaction_journal_id": "17"}]},
+            }
+        }
+
+        self.assertEqual(cli._transactionJournalId(response), "17")
+
+
 class TestTransferWithBills(unittest.TestCase):
     def setUp(self):
         api_token = os.getenv("TEST_API_TOKEN")
