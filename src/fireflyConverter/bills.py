@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import dataclasses as dc
+import io
 import json
 import logging
 import os
@@ -14,7 +15,10 @@ from fireflyConverter import data
 
 logger = logging.getLogger(__name__)
 
-BILL_EXTENSIONS: tuple[str, ...] = (".pdf", ".png", ".jpg", ".jpeg", ".webp")
+BILL_EXTENSIONS: tuple[str, ...] = (".pdf", ".png", ".jpg", ".jpeg", ".webp", ".heic", ".heif")
+
+# Formats the vision model cannot decode itself; they are transcoded before sending.
+HEIC_EXTENSIONS: tuple[str, ...] = (".heic", ".heif")
 
 IMAGE_MIME_TYPES: Dict[str, str] = {
     ".png": "image/png",
@@ -24,6 +28,11 @@ IMAGE_MIME_TYPES: Dict[str, str] = {
 }
 
 PDF_TEXT_MIN_CHARS = 20
+
+# Longest side of a transcoded photo, and its JPEG quality. Phone photos are far
+# larger than the model needs, and the request would carry megabytes otherwise.
+IMAGE_MAX_SIDE = 1600
+JPEG_QUALITY = 85
 
 SYSTEM_PROMPT = (
     "You extract structured data from a single invoice or receipt. "
@@ -105,7 +114,9 @@ def readBillContent(path: str, vision: bool = True, maxPages: int = 1) -> BillCo
 
     Digital PDFs are reduced to their text layer. When that layer is too short
     to be useful, or absent, the first page is rasterized and returned as an
-    image so the vision model can read it. Image files are returned directly.
+    image so the vision model can read it. Image files are returned directly,
+    except HEIC photos, which are transcoded to JPEG because the model server
+    cannot decode them.
 
     Args:
         path (str): Path of the bill file.
@@ -126,12 +137,49 @@ def readBillContent(path: str, vision: bool = True, maxPages: int = 1) -> BillCo
         return _readPdfContent(path, vision, maxPages)
 
     mimeType = IMAGE_MIME_TYPES.get(extension)
-    if mimeType is None:
+    if mimeType is None and extension not in HEIC_EXTENSIONS:
         raise BillExtractionError(f"Unsupported bill file type: {path}")
     if not vision:
         raise BillExtractionError(f"Vision is disabled but {path} is an image")
+    if extension in HEIC_EXTENSIONS:
+        return BillContent(imageDataUri=_heicDataUri(path))
 
     return BillContent(imageDataUri=_toDataUri(_readBytes(path), mimeType))
+
+
+def _heicDataUri(path: str) -> str:
+    """Transcode a HEIC photo into a downscaled JPEG data URI.
+
+    The model server decodes images with a library that cannot read HEIF, so the
+    photo is decoded locally, shrunk to a sensible size and re-encoded before it
+    is sent. The decoder already applies the rotation that phone photos store as
+    metadata rather than as pixels.
+
+    Args:
+        path (str): Path of the HEIC photo.
+
+    Returns:
+        str: JPEG data URI ready to be sent to the model.
+
+    Raises:
+        BillExtractionError: If the optional HEIC dependency is not installed.
+    """
+    try:
+        import pillow_heif
+        from PIL import Image
+    except ImportError as error:
+        raise BillExtractionError(
+            f"Reading {path} needs the optional HEIC dependency: "
+            "pip install 'firefly-cash-converter[heic]'"
+        ) from error
+
+    pillow_heif.register_heif_opener()
+    with Image.open(path) as photo:
+        photo = photo.convert("RGB")
+        photo.thumbnail((IMAGE_MAX_SIDE, IMAGE_MAX_SIDE))
+        buffer = io.BytesIO()
+        photo.save(buffer, format="JPEG", quality=JPEG_QUALITY)
+    return _toDataUri(buffer.getvalue(), "image/jpeg")
 
 
 def _readPdfContent(path: str, vision: bool, maxPages: int) -> BillContent:

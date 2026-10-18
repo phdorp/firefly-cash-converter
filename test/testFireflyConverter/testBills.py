@@ -1,10 +1,15 @@
 import base64
+import io
 import json
 import os
+import sys
 import tempfile
 import unittest
+from unittest import mock
 
+import pillow_heif
 import pymupdf
+from PIL import Image
 
 from fireflyConverter import bills
 
@@ -26,6 +31,20 @@ def _writeBytes(directory, name, content):
     path = os.path.join(directory, name)
     with open(path, "wb") as handle:
         handle.write(content)
+    return path
+
+
+def _writeHeic(directory, name, size=(400, 200), orientation=None):
+    """Write a HEIC fixture so no binary photo has to live in the repository."""
+    pillow_heif.register_heif_opener()
+    image = Image.new("RGB", size, "white")
+    path = os.path.join(directory, name)
+    if orientation is None:
+        image.save(path, format="HEIF")
+        return path
+    exif = Image.Exif()
+    exif[274] = orientation
+    image.save(path, format="HEIF", exif=exif.tobytes())
     return path
 
 
@@ -145,6 +164,18 @@ class TestDiscoverBills(unittest.TestCase):
     def testReturnsEmptyListForMissingDirectory(self):
         self.assertEqual(bills.discoverBills("/nonexistent/bills"), [])
 
+    def testFindsHeicAndHeifPhotos(self):
+        with tempfile.TemporaryDirectory() as directory:
+            _write(directory, "photo.heic")
+            _write(directory, "scan.HEIF")
+
+            found = bills.discoverBills(directory)
+
+            self.assertEqual(
+                found,
+                [os.path.join(directory, "photo.heic"), os.path.join(directory, "scan.HEIF")],
+            )
+
 
 class TestBuildBillMessages(unittest.TestCase):
     def testTextContentEmbedsTextAndVocabulary(self):
@@ -232,6 +263,59 @@ class TestReadBillContent(unittest.TestCase):
 
             self.assertIsNone(content.imageDataUri)
             self.assertEqual(content.text.strip(), "")
+
+
+class TestHeicBills(unittest.TestCase):
+    """Tests for phone photos in the HEIC format the vision model cannot decode."""
+
+    def _transcoded(self, content):
+        """Decode the JPEG the reader produced from a transcoded photo."""
+        self.assertTrue(content.imageDataUri.startswith("data:image/jpeg;base64,"))
+        raw = base64.b64decode(content.imageDataUri.split(",", 1)[1])
+        return Image.open(io.BytesIO(raw))
+
+    def testHeicPhotoIsTranscodedToJpeg(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = _writeHeic(directory, "photo.heic")
+
+            content = bills.readBillContent(path)
+
+            self.assertIsNone(content.text)
+            self.assertEqual(self._transcoded(content).format, "JPEG")
+
+    def testLargeHeicPhotoIsDownscaled(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = _writeHeic(directory, "photo.heic", size=(4000, 3000))
+
+            content = bills.readBillContent(path)
+
+            self.assertLessEqual(max(self._transcoded(content).size), bills.IMAGE_MAX_SIDE)
+
+    def testHeicRotationMetadataIsApplied(self):
+        """iPhone photos often store the rotation as metadata instead of pixels."""
+        with tempfile.TemporaryDirectory() as directory:
+            path = _writeHeic(directory, "photo.heic", size=(400, 200), orientation=6)
+
+            content = bills.readBillContent(path)
+
+            self.assertEqual(self._transcoded(content).size, (200, 400))
+
+    def testHeicPhotoHonoursTheVisionFlag(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = _writeHeic(directory, "photo.heic")
+
+            with self.assertRaisesRegex(bills.BillExtractionError, "Vision is disabled"):
+                bills.readBillContent(path, vision=False)
+
+    def testMissingHeicSupportExplainsHowToInstallIt(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = _writeHeic(directory, "photo.heic")
+
+            with mock.patch.dict(sys.modules, {"pillow_heif": None}):
+                with self.assertRaises(bills.BillExtractionError) as context:
+                    bills.readBillContent(path)
+
+            self.assertIn("firefly-cash-converter[heic]", str(context.exception))
 
 
 class TestBillReader(unittest.TestCase):
