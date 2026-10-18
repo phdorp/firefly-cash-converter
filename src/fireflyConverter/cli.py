@@ -225,8 +225,6 @@ def transfer(arguments: Namespace):
     applyRulesRequested = bool(arguments.apply_rules)
 
     if arguments.dry_run:
-        if report is not None:
-            print(bce.renderReport(report, verbose=verbose))
         for transaction in transactions:
             applyRules = _rulesApplyTo(transaction, matchedTransactionIds, applyRulesRequested)
             _tagAutoLabeled(transaction, applyRules, autoLabeled)
