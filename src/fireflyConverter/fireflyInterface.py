@@ -150,6 +150,61 @@ class FireflyInterface:
         logger.info(f"Retrieved {len(accounts)} accounts from Firefly III")
         return accounts
 
+    def _getAllAttributeValues(self, endpoint: str, attribute: str) -> List[str]:
+        """Fetch every page of a list endpoint and collect one attribute per item.
+
+        Args:
+            endpoint (str): API path below /api/v1 (e.g. "/categories").
+            attribute (str): Attribute key read from each item's attributes.
+
+        Returns:
+            List[str]: Collected attribute values in server order.
+        """
+        values: List[str] = []
+        page = 1
+        while True:
+            url = f"{self._api_url}{endpoint}"
+            response = self._session.get(url, params={"page": page, "limit": 100})
+            response.raise_for_status()
+            body: Dict = response.json()
+            for item in body.get("data", []):
+                value = item.get("attributes", {}).get(attribute)
+                if value is not None:
+                    values.append(value)
+            totalPages = body.get("meta", {}).get("pagination", {}).get("total_pages", 1)
+            if page >= totalPages:
+                break
+            page += 1
+        return values
+
+    def getCategories(self) -> List[str]:
+        """Retrieve the names of all categories defined on the Firefly III server.
+
+        Returns:
+            List[str]: Category names.
+
+        Raises:
+            requests.HTTPError: If the HTTP request fails.
+        """
+        logger.info("Retrieving categories from Firefly III")
+        categories = self._getAllAttributeValues("/categories", "name")
+        logger.info(f"Retrieved {len(categories)} categories from Firefly III")
+        return categories
+
+    def getTags(self) -> List[str]:
+        """Retrieve the names of all tags defined on the Firefly III server.
+
+        Returns:
+            List[str]: Tag names.
+
+        Raises:
+            requests.HTTPError: If the HTTP request fails.
+        """
+        logger.info("Retrieving tags from Firefly III")
+        tags = self._getAllAttributeValues("/tags", "tag")
+        logger.info(f"Retrieved {len(tags)} tags from Firefly III")
+        return tags
+
     def createAccount(self, account: data.PostAccount) -> requests.Response:
         """Create a new account on the Firefly III server.
 

@@ -2,6 +2,8 @@ import os
 import unittest
 from typing import Set
 
+import requests
+
 from fireflyConverter import data
 from fireflyConverter import fireflyInterface as ffi
 from fireflyConverter import loadData as ldb
@@ -358,6 +360,75 @@ class TestRuleGroupInterface(TestInterfaceBase):
             str(context.exception),
             "Expected error message about missing rule group title",
         )
+
+
+class _StubResponse:
+    """Minimal stand-in for a requests.Response used to exercise pagination logic."""
+
+    def __init__(self, payload, status_code=200):
+        self._payload = payload
+        self.status_code = status_code
+
+    def json(self):
+        return self._payload
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"status {self.status_code}")
+
+
+class _StubSession:
+    """Serves scripted pages and records the requests it received."""
+
+    def __init__(self, pages):
+        self._pages = pages
+        self.requests = []
+
+    def get(self, url, params=None):
+        self.requests.append((url, params))
+        page = (params or {}).get("page", 1)
+        return _StubResponse(self._pages[page - 1])
+
+
+class TestCategoryTagListing(unittest.TestCase):
+    """Unit tests for category/tag listing that run without a Firefly server."""
+
+    def _interfaceWith(self, pages):
+        interface = ffi.FireflyInterface(base_url="http://localhost", api_token="token")
+        interface._session = _StubSession(pages)
+        return interface, interface._session
+
+    def testGetCategoriesCollectsAllPages(self):
+        pages = [
+            {
+                "data": [{"attributes": {"name": "Groceries"}}, {"attributes": {"name": "Rent"}}],
+                "meta": {"pagination": {"total_pages": 2}},
+            },
+            {
+                "data": [{"attributes": {"name": "Travel"}}],
+                "meta": {"pagination": {"total_pages": 2}},
+            },
+        ]
+        interface, session = self._interfaceWith(pages)
+
+        self.assertEqual(interface.getCategories(), ["Groceries", "Rent", "Travel"])
+        self.assertEqual(len(session.requests), 2)
+
+    def testGetTagsReadsTagAttribute(self):
+        pages = [
+            {"data": [{"attributes": {"tag": "bill-matched"}}], "meta": {"pagination": {"total_pages": 1}}},
+        ]
+        interface, _ = self._interfaceWith(pages)
+
+        self.assertEqual(interface.getTags(), ["bill-matched"])
+
+    def testSinglePageStopsAfterFirstRequest(self):
+        pages = [{"data": [{"attributes": {"name": "Groceries"}}], "meta": {"pagination": {"total_pages": 1}}}]
+        interface, session = self._interfaceWith(pages)
+
+        interface.getCategories()
+
+        self.assertEqual(len(session.requests), 1)
 
 
 if __name__ == "__main__":
