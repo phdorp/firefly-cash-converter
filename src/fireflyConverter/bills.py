@@ -116,7 +116,11 @@ class PromptExample:
     response: Dict[str, Any]
 
 
-def loadPromptExamples(directory: str | None, maxSplits: int = 5) -> List[PromptExample]:
+def loadPromptExamples(
+    directory: str | None,
+    maxSplits: int = 5,
+    renderResolution: int = IMAGE_MAX_SIDE,
+) -> List[PromptExample]:
     """Load prompt examples from metadata JSON files in a directory."""
     if not directory:
         return []
@@ -146,7 +150,7 @@ def loadPromptExamples(directory: str | None, maxSplits: int = 5) -> List[Prompt
                     with open(inputFile, encoding="utf-8") as handle:
                         content = BillContent(text=handle.read())
                 else:
-                    content = readBillContent(inputFile)
+                    content = readBillContent(inputFile, renderResolution=renderResolution)
                 examples.append(PromptExample(os.path.basename(metadataPath), kind, content, response))
             except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError, BillExtractionError) as error:
                 raise BillExtractionError(f"Invalid {kind} prompt example {metadataPath}: {error}") from error
@@ -179,7 +183,12 @@ def discoverBills(directory: str, extensions: tuple[str, ...] = BILL_EXTENSIONS)
     return sorted(found)
 
 
-def readBillContent(path: str, vision: bool = True, maxPages: int = 1) -> BillContent:
+def readBillContent(
+    path: str,
+    vision: bool = True,
+    maxPages: int = 1,
+    renderResolution: int = IMAGE_MAX_SIDE,
+) -> BillContent:
     """Read a bill file into text or an image for the LLM.
 
     Digital PDFs are reduced to their text layer. When that layer is too short
@@ -193,6 +202,7 @@ def readBillContent(path: str, vision: bool = True, maxPages: int = 1) -> BillCo
         vision (bool): Whether images may be sent to the model, by rasterizing a
             scanned PDF or passing an image file through. Defaults to True.
         maxPages (int): Number of PDF pages to consider for text extraction.
+        renderResolution (int): Maximum pixel length of a rendered image side.
 
     Returns:
         BillContent: Extracted text or an image data URI.
@@ -201,10 +211,12 @@ def readBillContent(path: str, vision: bool = True, maxPages: int = 1) -> BillCo
         BillExtractionError: If the file type is not supported, or the file is an
             image and vision is disabled.
     """
+    if renderResolution <= 0:
+        raise BillExtractionError("renderResolution must be greater than zero")
     extension = os.path.splitext(path)[1].lower()
 
     if extension == ".pdf":
-        return _readPdfContent(path, vision, maxPages)
+        return _readPdfContent(path, vision, maxPages, renderResolution)
 
     mimeType = IMAGE_MIME_TYPES.get(extension)
     if mimeType is None and extension not in HEIC_EXTENSIONS:
@@ -212,12 +224,12 @@ def readBillContent(path: str, vision: bool = True, maxPages: int = 1) -> BillCo
     if not vision:
         raise BillExtractionError(f"Vision is disabled but {path} is an image")
     if extension in HEIC_EXTENSIONS:
-        return BillContent(imageDataUri=_heicDataUri(path))
+        return BillContent(imageDataUri=_heicDataUri(path, renderResolution))
 
-    return BillContent(imageDataUri=_toDataUri(_readBytes(path), mimeType))
+    return BillContent(imageDataUri=_imageDataUri(path, mimeType, renderResolution))
 
 
-def _heicDataUri(path: str) -> str:
+def _heicDataUri(path: str, renderResolution: int = IMAGE_MAX_SIDE) -> str:
     """Transcode a HEIC photo into a downscaled JPEG data URI.
 
     The model server decodes images with a library that cannot read HEIF, so the
@@ -246,21 +258,42 @@ def _heicDataUri(path: str) -> str:
     pillow_heif.register_heif_opener()
     with Image.open(path) as photo:
         photo = photo.convert("RGB")
-        photo.thumbnail((IMAGE_MAX_SIDE, IMAGE_MAX_SIDE))
+        photo.thumbnail((renderResolution, renderResolution))
         buffer = io.BytesIO()
         photo.save(buffer, format="JPEG", quality=JPEG_QUALITY)
     return _toDataUri(buffer.getvalue(), "image/jpeg")
 
 
-def _readPdfContent(path: str, vision: bool, maxPages: int) -> BillContent:
+def _readPdfContent(path: str, vision: bool, maxPages: int, renderResolution: int) -> BillContent:
     """Extract a PDF's text layer, falling back to a rendered first page."""
     with pymupdf.open(path) as document:
         text = _extractPdfText(document, maxPages)
         if len(text.strip()) >= PDF_TEXT_MIN_CHARS or not vision or document.page_count == 0:
             return BillContent(text=text)
 
-        pixmap = document.load_page(0).get_pixmap()
-        return BillContent(imageDataUri=_toDataUri(pixmap.tobytes("png"), "image/png"))
+        return BillContent(imageDataUri=_renderedImageDataUri(document.load_page(0), renderResolution))
+
+
+def _imageDataUri(path: str, mimeType: str, renderResolution: int) -> str:
+    """Return an image as-is when small enough, otherwise render it as PNG."""
+    try:
+        pixmap = pymupdf.Pixmap(path)
+    except pymupdf.mupdf.FzErrorFormat:
+        return _toDataUri(_readBytes(path), mimeType)
+    if max(pixmap.width, pixmap.height) <= renderResolution:
+        return _toDataUri(_readBytes(path), mimeType)
+    with pymupdf.open(path) as document:
+        return _renderedImageDataUri(document.load_page(0), renderResolution)
+
+
+def _renderedImageDataUri(page: "pymupdf.Page", renderResolution: int) -> str:
+    """Render a page so its longest side does not exceed renderResolution."""
+    if renderResolution <= 0:
+        raise ValueError("renderResolution must be greater than zero")
+    source = page.get_pixmap()
+    scale = min(1.0, renderResolution / max(source.width, source.height))
+    pixmap = page.get_pixmap(matrix=pymupdf.Matrix(scale, scale))
+    return _toDataUri(pixmap.tobytes("png"), "image/png")
 
 
 def _extractPdfText(document: "pymupdf.Document", maxPages: int) -> str:
@@ -377,6 +410,7 @@ class BillReader:
         _accounts (List[str]): Account names offered to the model.
         _vision (bool): Whether image fallback is allowed for scanned bills.
         _maxPages (int): Number of PDF pages considered for text extraction.
+        _renderResolution (int): Maximum pixel length of a rendered image side.
         _maxSplits (int): Maximum number of split entries requested from the model.
     """
 
@@ -388,6 +422,7 @@ class BillReader:
         accounts: List[str],
         vision: bool = True,
         maxPages: int = 1,
+        renderResolution: int = IMAGE_MAX_SIDE,
         maxSplits: int = 5,
         examples: List[PromptExample] | None = None,
     ) -> None:
@@ -400,6 +435,7 @@ class BillReader:
             accounts (List[str]): Existing Firefly III account names.
             vision (bool): Allow rasterizing scanned bills. Defaults to True.
             maxPages (int): Number of PDF pages to read text from. Defaults to 1.
+            renderResolution (int): Maximum pixel length of a rendered image side.
             maxSplits (int): Maximum number of split entries to request. Defaults to 5.
             examples (List[PromptExample] | None): Few-shot examples for the model.
         """
@@ -409,6 +445,7 @@ class BillReader:
         self._accounts = list(accounts)
         self._vision = vision
         self._maxPages = maxPages
+        self._renderResolution = renderResolution
         self._maxSplits = max(1, maxSplits)
         self._examples = list(examples or [])
 
@@ -425,7 +462,12 @@ class BillReader:
             BillExtractionError: If the file cannot be read or the response parsed.
         """
         logger.info(f"Reading bill: {path}")
-        content = readBillContent(path, vision=self._vision, maxPages=self._maxPages)
+        content = readBillContent(
+            path,
+            vision=self._vision,
+            maxPages=self._maxPages,
+            renderResolution=self._renderResolution,
+        )
         messages = buildBillMessages(
             content,
             self._categories,

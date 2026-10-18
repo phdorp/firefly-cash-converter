@@ -296,6 +296,31 @@ class TestBuildBillMessages(unittest.TestCase):
             1,
         )
 
+    def testPromptExampleImagesUseConfiguredRenderResolution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            positiveDirectory = os.path.join(directory, "positive")
+            imagePath = os.path.join(positiveDirectory, "photo.png")
+            os.makedirs(positiveDirectory)
+            Image.new("RGB", (4000, 3000), "white").save(imagePath)
+            response = {
+                "total": 4.0,
+                "date": "2026-10-01",
+                "vendor": "Cafe",
+                "category": None,
+                "account": None,
+                "tags": [],
+                "note": None,
+                "confidence": 0.9,
+            }
+            with open(os.path.join(positiveDirectory, "photo.json"), "w", encoding="utf-8") as handle:
+                json.dump({"input": "photo.png", "response": response}, handle)
+
+            examples = bills.loadPromptExamples(directory, renderResolution=800)
+            imageData = examples[0].content.imageDataUri
+            raw = base64.b64decode(imageData.split(",", 1)[1])
+            with Image.open(io.BytesIO(raw)) as image:
+                self.assertLessEqual(max(image.size), 800)
+
     def testRejectsExampleWithTooManySplits(self):
         with tempfile.TemporaryDirectory() as directory:
             positiveDirectory = os.path.join(directory, "positive")
@@ -327,6 +352,25 @@ class TestReadBillContent(unittest.TestCase):
 
             self.assertIsNone(content.text)
             self.assertTrue(content.imageDataUri.startswith("data:image/png;base64,"))
+
+    def testLargeImageIsDownscaledToConfiguredResolution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "bill.png")
+            Image.new("RGB", (4000, 3000), "white").save(path)
+
+            content = bills.readBillContent(path, renderResolution=800)
+
+            self.assertTrue(content.imageDataUri.startswith("data:image/png;base64,"))
+            raw = base64.b64decode(content.imageDataUri.split(",", 1)[1])
+            with Image.open(io.BytesIO(raw)) as image:
+                self.assertLessEqual(max(image.size), 800)
+
+    def testNonPositiveRenderResolutionRaises(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = _writeBytes(directory, "bill.png", _TINY_PNG)
+
+            with self.assertRaisesRegex(bills.BillExtractionError, "renderResolution"):
+                bills.readBillContent(path, renderResolution=0)
 
     def testPdfWithTextLayerUsesText(self):
         with tempfile.TemporaryDirectory() as directory:

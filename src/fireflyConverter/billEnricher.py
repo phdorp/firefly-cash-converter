@@ -30,6 +30,7 @@ class BillConfig:
         report_path (str): Where the enrichment report is written.
         vision (bool): Whether scanned bills may be rasterized for the vision model.
         max_pages (int): Number of PDF pages considered for text extraction.
+        render_resolution (int): Maximum pixel length of a rendered image side.
         accounts (bool): Whether bills may also set the transaction's counter-account.
         max_split_balls (int): Maximum number of bills allowed in one split transaction.
         prompt_examples_directory (str | None): Directory of few-shot prompt examples.
@@ -46,6 +47,7 @@ class BillConfig:
     report_path: str = "bills-report.md"
     vision: bool = True
     max_pages: int = 1
+    render_resolution: int = 1600
     accounts: bool = True
     account_types: List[str] = dc.field(default_factory=lambda: ["expense"])
     max_split_balls: int = 5

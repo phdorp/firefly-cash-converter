@@ -33,6 +33,8 @@ report_path = "./bills-report.md"
 vision = true
 # PDF pages considered for text extraction
 max_pages = 1
+# maximum pixels on the longest image side sent to the vision model
+render_resolution = 1600
 # let bills also set the transaction's counter-account (only filled when empty)
 accounts = true
 # existing Firefly account types offered to bills

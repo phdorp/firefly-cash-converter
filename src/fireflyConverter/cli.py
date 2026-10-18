@@ -455,6 +455,7 @@ def _runEnrichment(
     examples = bls.loadPromptExamples(
         billConfig.prompt_examples_directory,
         maxSplits=billConfig.max_split_balls,
+        renderResolution=billConfig.render_resolution,
     )
 
     reader = bls.BillReader(
@@ -464,6 +465,7 @@ def _runEnrichment(
         accounts,
         vision=billConfig.vision,
         maxPages=billConfig.max_pages,
+        renderResolution=billConfig.render_resolution,
         maxSplits=billConfig.max_split_balls,
         examples=examples,
     )

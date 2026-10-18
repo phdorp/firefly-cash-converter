@@ -229,6 +229,7 @@ vision = true                      # allow sending bills to the vision model
 # HEIC/HEIF photos (iPhone) are transcoded to JPEG locally; requires:
 # pip install "firefly-cash-converter[heic]"
 max_pages = 1                      # PDF pages considered for text extraction
+render_resolution = 1600           # maximum pixels on the longest image side
 accounts = true                    # let bills also set the counter-account
 account_types = ["expense"]        # existing Firefly account types offered to bills
 max_split_balls = 5                # maximum bills contributing to one transaction
