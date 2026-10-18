@@ -329,11 +329,7 @@ class PayloadFactory:
             transactionEntries = [
                 self._splitPayload(
                     split,
-                    type=type,
-                    date=date,
-                    description=description,
-                    source_name=source_name,
-                    destination_name=destination_name,
+                    parent=transaction,
                     order=index,
                 )
                 for index, split in enumerate(splits)
@@ -357,11 +353,7 @@ class PayloadFactory:
         self,
         split: TransactionSplit | dict[str, Any],
         *,
-        type: str,
-        date: str,
-        description: str,
-        source_name: Optional[str],
-        destination_name: Optional[str],
+        parent: dict[str, Any],
         order: int,
     ) -> dict[str, Any]:
         """Build one transaction entry from a split definition."""
@@ -370,16 +362,12 @@ class PayloadFactory:
         if amount is None:
             raise ValueError("A split transaction entry must include an amount")
 
-        entry: dict[str, Any] = {
-            "type": type,
-            "date": date,
-            "amount": str(amount),
-            "description": description,
-            "order": order,
-        }
+        entry = dict(parent)
+        entry["amount"] = str(amount)
+        entry["order"] = order
         for key, value in (
-            ("source_name", values.get("source_name", source_name)),
-            ("destination_name", values.get("destination_name", destination_name)),
+            ("source_name", values.get("source_name")),
+            ("destination_name", values.get("destination_name")),
             ("category_name", values.get("category_name")),
             ("tags", values.get("tags")),
             ("notes", values.get("notes")),
