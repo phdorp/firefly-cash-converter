@@ -87,6 +87,7 @@ class EnrichmentReport:
         duplicates (List[str]): Bills whose only candidate transaction was claimed by another bill.
         errors (List[str]): Bills that could not be read or parsed.
         issues (List[str]): Non-fatal warnings from applying bills.
+        llm_responses (dict[str, str]): Raw LLM responses keyed by bill path.
     """
 
     matched: List[MatchRecord] = dc.field(default_factory=list)
@@ -96,6 +97,7 @@ class EnrichmentReport:
     duplicates: List[str] = dc.field(default_factory=list)
     errors: List[str] = dc.field(default_factory=list)
     issues: List[str] = dc.field(default_factory=list)
+    llm_responses: dict[str, str] = dc.field(default_factory=dict)
 
 class BillEnricher:
     """Match dropped bills to transactions and enrich the matched ones.
@@ -162,6 +164,8 @@ class BillEnricher:
                 report.errors.append(f"{path}: {error}")
                 continue
             loadedBills.append(bill)
+            if bill.llm_response:
+                report.llm_responses[bill.path] = bill.llm_response
 
         consumedPaths: set[str] = set()
         for index, bill in enumerate(loadedBills):
@@ -282,7 +286,7 @@ def renderReport(report: EnrichmentReport, verbose: bool = False) -> str:
 
     Args:
         report (EnrichmentReport): Report to render.
-        verbose (bool): Include raw LLM responses for matched bills.
+        verbose (bool): Include raw LLM responses for all bills that were read.
 
     Returns:
         str: Markdown report text.
@@ -314,19 +318,19 @@ def renderReport(report: EnrichmentReport, verbose: bool = False) -> str:
 
     lines.append("")
     lines.append("## Unmatched bills")
-    lines.extend(f"- {path}" for path in report.unmatched)
+    lines.extend(_renderBillPaths(report.unmatched, report, verbose))
     if not report.unmatched:
         lines.append("- (none)")
 
     lines.append("")
     lines.append("## Ambiguous bills")
-    lines.extend(f"- {path}" for path in report.ambiguous)
+    lines.extend(_renderBillPaths(report.ambiguous, report, verbose))
     if not report.ambiguous:
         lines.append("- (none)")
 
     lines.append("")
     lines.append("## Duplicate bills")
-    lines.extend(f"- {path}" for path in report.duplicates)
+    lines.extend(_renderBillPaths(report.duplicates, report, verbose))
     if not report.duplicates:
         lines.append("- (none)")
 
@@ -344,3 +348,14 @@ def renderReport(report: EnrichmentReport, verbose: bool = False) -> str:
 
     lines.append("")
     return "\n".join(lines)
+
+
+def _renderBillPaths(paths: List[str], report: EnrichmentReport, verbose: bool) -> List[str]:
+    """Render bill paths and optionally append their raw LLM responses."""
+    rendered: List[str] = []
+    for path in paths:
+        line = f"- {path}"
+        if verbose and path in report.llm_responses:
+            line += f" | LLM: {report.llm_responses[path]}"
+        rendered.append(line)
+    return rendered

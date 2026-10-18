@@ -313,6 +313,17 @@ class TestBillEnricher(unittest.TestCase):
         compact = be.renderReport(report, verbose=False)
         self.assertNotIn('"total": 115.0', compact)
 
+    def testRenderReportVerboseIncludesUnmatchedLlmResponse(self):
+        report = be.EnrichmentReport(
+            unmatched=["/b/unmatched.pdf"],
+            llm_responses={"/b/unmatched.pdf": '{"total": 3.0, "vendor": "Cafe"}'},
+        )
+
+        verbose = be.renderReport(report, verbose=True)
+
+        self.assertIn("/b/unmatched.pdf", verbose)
+        self.assertIn('LLM: {"total": 3.0, "vendor": "Cafe"}', verbose)
+
 
 if __name__ == "__main__":
     unittest.main()
