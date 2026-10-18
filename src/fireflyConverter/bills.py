@@ -104,14 +104,16 @@ def readBillContent(path: str, vision: bool = True, maxPages: int = 1) -> BillCo
 
     Args:
         path (str): Path of the bill file.
-        vision (bool): Whether rasterizing to an image is allowed. Defaults to True.
+        vision (bool): Whether images may be sent to the model, by rasterizing a
+            scanned PDF or passing an image file through. Defaults to True.
         maxPages (int): Number of PDF pages to consider for text extraction.
 
     Returns:
         BillContent: Extracted text or an image data URI.
 
     Raises:
-        BillExtractionError: If the file type is not a supported bill format.
+        BillExtractionError: If the file type is not supported, or the file is an
+            image and vision is disabled.
     """
     extension = os.path.splitext(path)[1].lower()
 
@@ -121,6 +123,8 @@ def readBillContent(path: str, vision: bool = True, maxPages: int = 1) -> BillCo
     mimeType = IMAGE_MIME_TYPES.get(extension)
     if mimeType is None:
         raise BillExtractionError(f"Unsupported bill file type: {path}")
+    if not vision:
+        raise BillExtractionError(f"Vision is disabled but {path} is an image")
 
     return BillContent(imageDataUri=_toDataUri(_readBytes(path), mimeType))
 

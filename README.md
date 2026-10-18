@@ -158,7 +158,7 @@ marker_tag = "bill-matched"        # audit tag written onto enriched transaction
 move_processed = true              # archive applied bills after a run
 processed_subdir = "processed"     # subfolder applied bills are moved into
 report_path = "./bills-report.md"  # where the Markdown report is written
-vision = true                      # allow rasterizing scanned bills
+vision = true                      # allow sending bills to the vision model
 max_pages = 1                      # PDF pages considered for text extraction
 
 [llm]

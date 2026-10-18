@@ -185,6 +185,13 @@ class TestReadBillContent(unittest.TestCase):
             with self.assertRaises(bills.BillExtractionError):
                 bills.readBillContent(path)
 
+    def testImageFileWithoutVisionRaises(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = _writeBytes(directory, "bill.png", _TINY_PNG)
+
+            with self.assertRaises(bills.BillExtractionError):
+                bills.readBillContent(path, vision=False)
+
     def testScannedPdfWithoutVisionReturnsEmptyText(self):
         with tempfile.TemporaryDirectory() as directory:
             path = _writePdf(directory, "scan.pdf", text=None)

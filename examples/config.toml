@@ -26,7 +26,7 @@ move_processed = true
 processed_subdir = "processed"
 # where the Markdown report is written
 report_path = "./bills-report.md"
-# allow rasterizing scanned bills for the vision model
+# allow sending bills (scans and photos) to the vision model
 vision = true
 # PDF pages considered for text extraction
 max_pages = 1
