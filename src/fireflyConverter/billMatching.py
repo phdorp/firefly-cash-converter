@@ -16,6 +16,7 @@ MATCHED = "matched"
 NO_TOTAL = "no_total"
 NO_CANDIDATE = "no_candidate"
 AMBIGUOUS = "ambiguous"
+ALREADY_MATCHED = "already_matched"
 
 _WITHDRAWAL = data.TransactionType.WITHDRAWAL.value
 
@@ -25,7 +26,8 @@ class MatchOutcome:
     """Result of matching one bill against the transaction batch.
 
     Attributes:
-        status (str): One of ``matched``, ``no_total``, ``no_candidate`` or ``ambiguous``.
+        status (str): One of ``matched``, ``no_total``, ``no_candidate``,
+            ``ambiguous`` or ``already_matched``.
         transaction (data.BaseTransaction | None): The matched transaction, if any.
     """
 
@@ -66,11 +68,16 @@ def _tokenize(text: str) -> Set[str]:
 class BillMatcher:
     """Match bills to withdrawal transactions by amount, date and vendor.
 
+    A transaction that has been matched is claimed, so a later bill can never
+    reuse it: the one-bill-one-transaction rule holds even when two bills look
+    alike.
+
     Attributes:
         _transactions (List[data.BaseTransaction]): Withdrawal transactions to match against.
         _dateWindowDays (int): Maximum allowed day gap between bill and transaction dates.
         _amountTolerance (float): Allowed difference between bill total and transaction amount.
         _vendorThreshold (float): Minimum vendor similarity for a candidate.
+        _claimed (Set[int]): Identities of transactions already handed to a bill.
     """
 
     def __init__(
@@ -92,9 +99,10 @@ class BillMatcher:
         self._dateWindowDays = dateWindowDays
         self._amountTolerance = amountTolerance
         self._vendorThreshold = vendorThreshold
+        self._claimed: Set[int] = set()
 
     def match(self, bill: data.Bill) -> MatchOutcome:
-        """Find the single transaction that belongs to a bill.
+        """Find the single unclaimed transaction that belongs to a bill.
 
         Args:
             bill (data.Bill): The bill to match.
@@ -106,10 +114,15 @@ class BillMatcher:
             return MatchOutcome(NO_TOTAL)
 
         candidates = [transaction for transaction in self._transactions if self._isCandidate(bill, transaction)]
-        if len(candidates) == 1:
-            return MatchOutcome(MATCHED, candidates[0])
-        if len(candidates) > 1:
+        available = [transaction for transaction in candidates if id(transaction) not in self._claimed]
+
+        if len(available) == 1:
+            self._claimed.add(id(available[0]))
+            return MatchOutcome(MATCHED, available[0])
+        if len(available) > 1:
             return MatchOutcome(AMBIGUOUS)
+        if candidates:
+            return MatchOutcome(ALREADY_MATCHED)
         return MatchOutcome(NO_CANDIDATE)
 
     def _isCandidate(self, bill: data.Bill, transaction: data.BaseTransaction) -> bool:

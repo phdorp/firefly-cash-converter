@@ -81,6 +81,29 @@ class TestBillMatcher(unittest.TestCase):
         self.assertEqual(strict.match(_bill(total=12.34, date="2026-10-01", vendor="ACME")).status, "no_candidate")
         self.assertEqual(lenient.match(_bill(total=12.34, date="2026-10-01", vendor="ACME")).status, "matched")
 
+    def testMatchedTransactionIsNotHandedToASecondBill(self):
+        transaction = _tx(12.34, "2026-10-01", "ACME GmbH")
+        matcher = bm.BillMatcher([transaction])
+
+        first = matcher.match(_bill(path="/bills/one.pdf", total=12.34, date="2026-10-01", vendor="ACME GmbH"))
+        second = matcher.match(_bill(path="/bills/two.pdf", total=12.34, date="2026-10-01", vendor="ACME GmbH"))
+
+        self.assertEqual(first.status, "matched")
+        self.assertIs(first.transaction, transaction)
+        self.assertEqual(second.status, "already_matched")
+        self.assertIsNone(second.transaction)
+
+    def testSecondBillTakesTheRemainingUnclaimedTransaction(self):
+        firstTransaction = _tx(9.99, "2026-10-01", "Shop")
+        secondTransaction = _tx(9.99, "2026-10-02", "Shop")
+        matcher = bm.BillMatcher([firstTransaction, secondTransaction])
+
+        first = matcher.match(_bill(path="/bills/one.pdf", total=9.99, date="2026-10-01", vendor="Shop"))
+        second = matcher.match(_bill(path="/bills/two.pdf", total=9.99, date="2026-10-02", vendor="Shop"))
+
+        self.assertEqual(first.status, "ambiguous")
+        self.assertEqual(second.status, "ambiguous")
+
 
 class TestApplyBill(unittest.TestCase):
     def testSetsCanonicalCategoryTagsAndNotes(self):

@@ -81,6 +81,24 @@ class TestBillEnricher(unittest.TestCase):
             self.assertEqual(report.ambiguous, [billPath])
             self.assertEqual(report.matched, [])
 
+    def testSecondBillForSameTransactionIsReportedAsDuplicate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            firstPath = _write(directory, "a.pdf")
+            secondPath = _write(directory, "b.pdf")
+            reader = _StubReader(
+                {
+                    firstPath: data.Bill(path=firstPath, total=115.0, date="2025-08-01", vendor="money"),
+                    secondPath: data.Bill(path=secondPath, total=115.0, date="2025-08-01", vendor="money"),
+                }
+            )
+            enricher = be.BillEnricher(reader, categories=[], tags=[], config=be.BillConfig(directory=directory))
+
+            report = enricher.enrich([_tx(115.0, "2025-08-01", "money - Removal")])
+
+            self.assertEqual(len(report.matched), 1)
+            self.assertEqual(report.matched[0].bill_path, firstPath)
+            self.assertEqual(report.duplicates, [secondPath])
+
     def testReportsReaderErrors(self):
         with tempfile.TemporaryDirectory() as directory:
             billPath = _write(directory, "broken.pdf")
@@ -111,6 +129,7 @@ class TestBillEnricher(unittest.TestCase):
             matched=[be.MatchRecord(bill_path="/b/a.pdf", description="money - Removal", category="Groceries", tags=["x"])],
             unmatched=["/b/b.pdf"],
             ambiguous=[],
+            duplicates=["/b/d.pdf"],
             errors=["/b/c.pdf: boom"],
             issues=["Tag 'y' dropped"],
         )
@@ -120,6 +139,7 @@ class TestBillEnricher(unittest.TestCase):
         self.assertIn("Matched", text)
         self.assertIn("a.pdf", text)
         self.assertIn("/b/b.pdf", text)
+        self.assertIn("/b/d.pdf", text)
         self.assertIn("boom", text)
         self.assertIn("Tag 'y' dropped", text)
 

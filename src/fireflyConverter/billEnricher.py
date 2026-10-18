@@ -70,6 +70,7 @@ class EnrichmentReport:
         matched (List[MatchRecord]): Bills that were matched and applied.
         unmatched (List[str]): Bills without a matching transaction.
         ambiguous (List[str]): Bills that matched more than one transaction.
+        duplicates (List[str]): Bills whose only candidate transaction was claimed by another bill.
         errors (List[str]): Bills that could not be read or parsed.
         issues (List[str]): Non-fatal warnings from applying bills.
     """
@@ -77,6 +78,7 @@ class EnrichmentReport:
     matched: List[MatchRecord] = dc.field(default_factory=list)
     unmatched: List[str] = dc.field(default_factory=list)
     ambiguous: List[str] = dc.field(default_factory=list)
+    duplicates: List[str] = dc.field(default_factory=list)
     errors: List[str] = dc.field(default_factory=list)
     issues: List[str] = dc.field(default_factory=list)
 
@@ -162,6 +164,8 @@ class BillEnricher:
                 )
             elif outcome.status == bm.AMBIGUOUS:
                 report.ambiguous.append(path)
+            elif outcome.status == bm.ALREADY_MATCHED:
+                report.duplicates.append(path)
             else:
                 report.unmatched.append(path)
 
@@ -192,7 +196,8 @@ def renderReport(report: EnrichmentReport) -> str:
     lines: List[str] = ["# Bill enrichment report", ""]
     lines.append(
         f"Matched: {len(report.matched)} | Unmatched: {len(report.unmatched)} | "
-        f"Ambiguous: {len(report.ambiguous)} | Errors: {len(report.errors)}"
+        f"Ambiguous: {len(report.ambiguous)} | Duplicates: {len(report.duplicates)} | "
+        f"Errors: {len(report.errors)}"
     )
     lines.append("")
 
@@ -216,6 +221,12 @@ def renderReport(report: EnrichmentReport) -> str:
     lines.append("## Ambiguous bills")
     lines.extend(f"- {path}" for path in report.ambiguous)
     if not report.ambiguous:
+        lines.append("- (none)")
+
+    lines.append("")
+    lines.append("## Duplicate bills")
+    lines.extend(f"- {path}" for path in report.duplicates)
+    if not report.duplicates:
         lines.append("- (none)")
 
     lines.append("")
