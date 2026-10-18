@@ -68,6 +68,7 @@ class EnrichmentReport:
 
     Attributes:
         matched (List[MatchRecord]): Bills that were matched and applied.
+        matched_transactions (List[data.BaseTransaction]): Transactions that a bill was applied to.
         unmatched (List[str]): Bills without a matching transaction.
         ambiguous (List[str]): Bills that matched more than one transaction.
         duplicates (List[str]): Bills whose only candidate transaction was claimed by another bill.
@@ -76,6 +77,7 @@ class EnrichmentReport:
     """
 
     matched: List[MatchRecord] = dc.field(default_factory=list)
+    matched_transactions: List[data.BaseTransaction] = dc.field(default_factory=list)
     unmatched: List[str] = dc.field(default_factory=list)
     ambiguous: List[str] = dc.field(default_factory=list)
     duplicates: List[str] = dc.field(default_factory=list)
@@ -162,6 +164,7 @@ class BillEnricher:
                         tags=list(outcome.transaction.tags or []),
                     )
                 )
+                report.matched_transactions.append(outcome.transaction)
             elif outcome.status == bm.AMBIGUOUS:
                 report.ambiguous.append(path)
             elif outcome.status == bm.ALREADY_MATCHED:

@@ -15,6 +15,8 @@ from fireflyConverter import loadData as ldb
 
 logger = logging.getLogger(__name__)
 
+AUTO_LABELED_TAG = "auto_labeled"
+
 
 class CommandType(enum.Enum):
     CONVERT = "convert"
@@ -70,6 +72,14 @@ def defineTransferParser(subparsers: _SubParsersAction):
         nargs="*",
         help="List of rule group titles to apply after transferring transactions.",
         default=None,
+    )
+    parser.add_argument(
+        "--apply_rules",
+        action="store_true",
+        help=(
+            "Let Firefly III run all of its rules on each transaction when it is imported. "
+            "Cannot be combined with --apply_rule_groups."
+        ),
     )
     parser.add_argument(
         "--bills_directory",
@@ -197,32 +207,51 @@ def transfer(arguments: Namespace):
     billDirectory = _configuredBillDirectory(arguments, config)
     if billDirectory:
         billConfig = _loadBillConfig(config, billDirectory)
-        _validateRuleGroupUsage(billConfig, arguments.apply_rule_groups)
+
+    _validateRuleUsage(bool(arguments.apply_rules), arguments.apply_rule_groups, billConfig)
+
+    if billConfig is not None:
         enricher, report = _runEnrichment(config, interface, billConfig, transactions)
         _writeReport(billConfig.report_path, report)
+
+    matchedTransactionIds = _matchedTransactionIds(report)
+    autoLabeled = billDirectory is not None
+    applyRulesRequested = bool(arguments.apply_rules)
 
     if arguments.dry_run:
         if report is not None:
             print(bce.renderReport(report))
         for transaction in transactions:
+            applyRules = _rulesApplyTo(transaction, matchedTransactionIds, applyRulesRequested)
+            _tagAutoLabeled(transaction, applyRules, autoLabeled)
             logger.info(
                 f"[dry-run] {transaction.date} | {transaction.amount} | {transaction.description} | "
-                f"category={transaction.category_name} | tags={transaction.tags}"
+                f"category={transaction.category_name} | tags={transaction.tags} | apply_rules={applyRules}"
             )
         logger.info("Dry run completed; no transactions were transferred")
         return
 
     logger.info(f"Transferring {len(transactions)} transactions to Firefly III")
     processed_count = 0
+    rulesAppliedCount = 0
     for transaction in transactions:
-        response = interface.createTransaction(transaction)
+        applyRules = _rulesApplyTo(transaction, matchedTransactionIds, applyRulesRequested)
+        _tagAutoLabeled(transaction, applyRules, autoLabeled)
+        response = interface.createTransaction(transaction, apply_rules=applyRules)
         processed_count += 1
+        if applyRules:
+            rulesAppliedCount += 1
         if response.status_code == 200:
             logger.debug(f"Transaction {processed_count}/{len(transactions)} created successfully (status: {response.status_code})")
         else:
             logger.info(f"Transaction {processed_count}/{len(transactions)} processed with status: {response.status_code}")
 
     logger.info(f"Transfer command completed successfully. Processed {processed_count} transactions")
+    if arguments.apply_rules:
+        logger.info(
+            f"Firefly III rules applied on import to {rulesAppliedCount} transaction(s); "
+            f"{len(matchedTransactionIds)} bill-matched transaction(s) were left untouched"
+        )
 
     if enricher is not None and billConfig.move_processed:
         enricher.archiveProcessed(report)
@@ -272,24 +301,86 @@ def _loadBillConfig(config: dict, directory: str) -> bce.BillConfig:
     return bce.BillConfig(**section)
 
 
-def _validateRuleGroupUsage(billConfig: Optional[bce.BillConfig], applyRuleGroups: Optional[List[str]]) -> None:
-    """Reject rule groups combined with bill enrichment.
+def _validateRuleUsage(
+    applyRules: bool,
+    applyRuleGroups: Optional[List[str]],
+    billConfig: Optional[bce.BillConfig],
+) -> None:
+    """Reject rule requests that would label transactions twice or overwrite bills.
 
-    Rule groups rewrite categories and tags, which would overwrite the values
-    the LLM just wrote for the matched bills.
+    ``--apply_rules`` and ``--apply_rule_groups`` are two different Firefly III
+    mechanisms; running both on one import would apply the rules twice. Rule
+    groups are also rejected together with bill enrichment, because triggering a
+    group rewrites stored transactions and would overwrite the values the LLM
+    wrote from the bills.
 
     Args:
-        billConfig (Optional[bce.BillConfig]): Enrichment configuration, or None when off.
+        applyRules (bool): Whether the per-transaction rule flag was requested.
         applyRuleGroups (Optional[List[str]]): Rule group titles from the command line.
+        billConfig (Optional[bce.BillConfig]): Enrichment configuration, or None when off.
 
     Raises:
-        ValueError: If both bill enrichment and rule groups are requested.
+        ValueError: If both rule mechanisms are requested, or rule groups are
+            combined with bill enrichment.
     """
+    if applyRules and applyRuleGroups:
+        raise ValueError(
+            "--apply_rules and --apply_rule_groups cannot be combined: Firefly III would "
+            "run its rules twice on the same transactions"
+        )
     if billConfig is not None and applyRuleGroups:
         raise ValueError(
             "Rule groups cannot be combined with bill enrichment because they would "
             "overwrite the category and tags written from the bills"
         )
+
+
+def _matchedTransactionIds(report: Optional[bce.EnrichmentReport]) -> set[int]:
+    """Return the identities of the transactions a bill was applied to.
+
+    Args:
+        report (Optional[bce.EnrichmentReport]): Enrichment report, or None when off.
+
+    Returns:
+        set[int]: ``id()`` of every enriched transaction.
+    """
+    if report is None:
+        return set()
+    return {id(transaction) for transaction in report.matched_transactions}
+
+
+def _rulesApplyTo(transaction: data.BaseTransaction, matchedTransactionIds: set[int], requested: bool) -> bool:
+    """Return whether Firefly III should run its rules for this transaction.
+
+    Bill-enriched transactions never qualify, so the LLM output stays intact.
+
+    Args:
+        transaction (data.BaseTransaction): Transaction about to be posted.
+        matchedTransactionIds (set[int]): Identities of bill-enriched transactions.
+        requested (bool): Whether per-transaction rule application was requested.
+
+    Returns:
+        bool: True when Firefly III should run its rules at import.
+    """
+    return requested and id(transaction) not in matchedTransactionIds
+
+
+def _tagAutoLabeled(transaction: data.BaseTransaction, applyRules: bool, autoLabeled: bool) -> None:
+    """Add the auto-label audit tag to a transaction that rules labelled at import.
+
+    The tag is only written for imports that also use bill enrichment, where it
+    distinguishes the rule-labelled transactions from the bill-labelled ones.
+
+    Args:
+        transaction (data.BaseTransaction): Transaction to tag in place.
+        applyRules (bool): Whether Firefly III runs its rules for this transaction.
+        autoLabeled (bool): Whether bill enrichment is active for this import.
+    """
+    if not (applyRules and autoLabeled):
+        return
+    tags = list(transaction.tags or [])
+    if AUTO_LABELED_TAG not in tags:
+        transaction.tags = tags + [AUTO_LABELED_TAG]
 
 
 def _runEnrichment(

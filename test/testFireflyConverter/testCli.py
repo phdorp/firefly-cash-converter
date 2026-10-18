@@ -6,6 +6,7 @@ from unittest import mock
 
 import pymupdf
 
+from fireflyConverter import billEnricher as be
 from fireflyConverter import cli, data, llmInterface
 from fireflyConverter import fireflyInterface as ffi
 from .testFireflyInterface import create_test_rules
@@ -212,6 +213,16 @@ class TestTransferParser(unittest.TestCase):
         self.assertIsNone(args.bills_directory)
         self.assertFalse(args.dry_run)
 
+    def testApplyRulesDefaultsToOff(self):
+        args = self._parser.parse_args(["transfer", "common"])
+
+        self.assertFalse(args.apply_rules)
+
+    def testApplyRulesIsParsed(self):
+        args = self._parser.parse_args(["transfer", "common", "--apply_rules"])
+
+        self.assertTrue(args.apply_rules)
+
 
 class TestBillDirectorySelection(unittest.TestCase):
     """Offline tests for the opt-in trigger of bill enrichment."""
@@ -245,18 +256,93 @@ class TestBillDirectorySelection(unittest.TestCase):
         self.assertEqual(config.marker_tag, "bill-matched")
 
 
-class TestRuleGroupGuard(unittest.TestCase):
-    """Offline tests for the rule-group interaction with bill enrichment."""
+class TestRuleUsageGuard(unittest.TestCase):
+    """Offline tests for the rule flag interactions with bill enrichment."""
 
     def testRuleGroupsWithBillEnrichmentAreRejected(self):
         with self.assertRaises(ValueError):
-            cli._validateRuleGroupUsage(object(), ["Test Rule Group"])
+            cli._validateRuleUsage(False, ["Test Rule Group"], object())
 
     def testRuleGroupsWithoutBillEnrichmentAreAllowed(self):
-        cli._validateRuleGroupUsage(None, ["Test Rule Group"])
+        cli._validateRuleUsage(False, ["Test Rule Group"], None)
 
     def testBillEnrichmentWithoutRuleGroupsIsAllowed(self):
-        cli._validateRuleGroupUsage(object(), None)
+        cli._validateRuleUsage(False, None, object())
+
+    def testApplyRulesAndRuleGroupsTogetherAreRejected(self):
+        with self.assertRaises(ValueError):
+            cli._validateRuleUsage(True, ["Test Rule Group"], None)
+
+    def testApplyRulesWithoutRuleGroupsIsAllowed(self):
+        cli._validateRuleUsage(True, None, None)
+
+
+class TestAutoLabeledTag(unittest.TestCase):
+    """Offline tests for the auto_labeled audit tag."""
+
+    def _transaction(self, **overrides):
+        values = {"date": "2025-01-01", "amount": 1.0, "description": "coffee", "type": "withdrawal"}
+        values.update(overrides)
+        return data.PostTransaction(**values)
+
+    def testTagIsAddedWhenRulesRunDuringABilledImport(self):
+        transaction = self._transaction()
+
+        cli._tagAutoLabeled(transaction, applyRules=True, autoLabeled=True)
+
+        self.assertEqual(transaction.tags, [cli.AUTO_LABELED_TAG])
+
+    def testTagIsNotAddedWithoutBillEnrichment(self):
+        transaction = self._transaction()
+
+        cli._tagAutoLabeled(transaction, applyRules=True, autoLabeled=False)
+
+        self.assertIsNone(transaction.tags)
+
+    def testTagIsNotAddedWhenNoRulesRun(self):
+        transaction = self._transaction()
+
+        cli._tagAutoLabeled(transaction, applyRules=False, autoLabeled=True)
+
+        self.assertIsNone(transaction.tags)
+
+    def testExistingTagsAreKeptAndTheTagIsAddedOnce(self):
+        transaction = self._transaction(tags=["existing", cli.AUTO_LABELED_TAG])
+
+        cli._tagAutoLabeled(transaction, applyRules=True, autoLabeled=True)
+
+        self.assertEqual(transaction.tags, ["existing", cli.AUTO_LABELED_TAG])
+
+
+class TestRuleApplicationTargets(unittest.TestCase):
+    """Offline tests for which transactions Firefly III rules are applied to."""
+
+    def _transaction(self):
+        return data.PostTransaction(date="2025-01-01", amount=1.0, description="coffee", type="withdrawal")
+
+    def testRulesRunWhenRequestedAndNoBillMatched(self):
+        transaction = self._transaction()
+
+        self.assertTrue(cli._rulesApplyTo(transaction, set(), True))
+
+    def testRulesStayOffWhenNotRequested(self):
+        transaction = self._transaction()
+
+        self.assertFalse(cli._rulesApplyTo(transaction, set(), False))
+
+    def testBillMatchedTransactionsNeverGetRules(self):
+        transaction = self._transaction()
+
+        self.assertFalse(cli._rulesApplyTo(transaction, {id(transaction)}, True))
+
+    def testMatchedTransactionsComeFromTheReport(self):
+        transaction = self._transaction()
+        report = be.EnrichmentReport(matched_transactions=[transaction])
+
+        self.assertEqual(cli._matchedTransactionIds(report), {id(transaction)})
+
+    def testWithoutAReportNothingIsMatched(self):
+        self.assertEqual(cli._matchedTransactionIds(None), set())
 
 
 class TestTransferWithBills(unittest.TestCase):
@@ -370,6 +456,49 @@ class TestTransferWithBills(unittest.TestCase):
         self.assertEqual(len(self._fireflyInterface.getTransactions(limit=100, page=1)), 5)
         self.assertFalse(os.path.exists(billPath), "Matched bill should be archived")
         self.assertTrue(os.path.exists(os.path.join(self._tempBills.name, "processed", "acme.pdf")))
+
+    @mock.patch.object(llmInterface, "LLMInterface", _FakeLlm)
+    def testApplyRulesLabelsOnlyTheNonBillTransactions(self):
+        test_dir = os.path.dirname(__file__)
+        test_data_dir = os.path.normpath(os.path.join(test_dir, "..", "data"))
+        self._fireflyInterface.createAccount(data.PostAssetAccount(name="tr"))
+        self._writeConfig()
+        self._writeBill()
+
+        parser = ArgumentParser()
+        cli.defineTransferParser(parser.add_subparsers(dest="command"))
+        args = parser.parse_args(
+            [
+                "transfer",
+                "common",
+                "--config_path",
+                self._tempConfig.name,
+                "--input_directory",
+                test_data_dir,
+                "--input_name",
+                "common",
+                "--account_name",
+                "tr",
+                "--bills_directory",
+                self._tempBills.name,
+                "--apply_rules",
+            ]
+        )
+
+        cli.transfer(args)
+
+        transactions = self._fireflyInterface.getTransactions(limit=100, page=1)
+        self.assertEqual(len(transactions), 5)
+
+        billMatched = [transaction for transaction in transactions if transaction.description == "money - Removal"]
+        self.assertEqual(len(billMatched), 1, "Exactly one transaction should be bill-matched")
+        self.assertIn("bill-matched", billMatched[0].tags or [])
+        self.assertNotIn(cli.AUTO_LABELED_TAG, billMatched[0].tags or [])
+
+        ruleLabeled = [transaction for transaction in transactions if transaction.description != "money - Removal"]
+        self.assertEqual(len(ruleLabeled), 4)
+        for transaction in ruleLabeled:
+            self.assertIn(cli.AUTO_LABELED_TAG, transaction.tags or [])
 
     @mock.patch.object(llmInterface, "LLMInterface", _FakeLlm)
     def testFailedTransferDoesNotArchiveBills(self):

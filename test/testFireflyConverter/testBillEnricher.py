@@ -58,6 +58,30 @@ class TestBillEnricher(unittest.TestCase):
             self.assertEqual(report.matched[0].bill_path, billPath)
             self.assertEqual(report.unmatched, [])
 
+    def testReportListsTheEnrichedTransactions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            billPath = _write(directory, "acme.pdf")
+            reader = _StubReader(
+                {
+                    billPath: data.Bill(
+                        path=billPath,
+                        total=115.0,
+                        date="2025-08-01",
+                        vendor="money",
+                        category="Groceries",
+                        tags=[],
+                        confidence=0.9,
+                    )
+                }
+            )
+            matchedTx = _tx(115.0, "2025-08-01", "money - Removal")
+            untouchedTx = _tx(9.0, "2025-08-02", "coffee")
+            enricher = be.BillEnricher(reader, categories=["Groceries"], tags=[], config=be.BillConfig(directory=directory))
+
+            report = enricher.enrich([matchedTx, untouchedTx])
+
+            self.assertEqual(report.matched_transactions, [matchedTx])
+
     def testReportsUnmatchedBill(self):
         with tempfile.TemporaryDirectory() as directory:
             billPath = _write(directory, "acme.pdf")
