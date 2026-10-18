@@ -57,6 +57,7 @@ class MatchRecord:
         category (str | None): Category written onto the transaction.
         account (str | None): Counter-account written onto the transaction.
         tags (List[str]): Tags written onto the transaction.
+        llm_response (str | None): Raw LLM response for verbose reporting.
     """
 
     bill_path: str
@@ -64,6 +65,7 @@ class MatchRecord:
     category: Optional[str]
     tags: List[str]
     account: Optional[str] = None
+    llm_response: Optional[str] = None
 
 
 @dc.dataclass
@@ -172,6 +174,7 @@ class BillEnricher:
                         category=outcome.transaction.category_name,
                         account=outcome.transaction.destination_name,
                         tags=list(outcome.transaction.tags or []),
+                        llm_response=bill.llm_response,
                     )
                 )
                 report.matched_transactions.append(outcome.transaction)
@@ -223,11 +226,12 @@ def _uniqueTarget(directory: str, filename: str) -> str:
     return candidate
 
 
-def renderReport(report: EnrichmentReport) -> str:
+def renderReport(report: EnrichmentReport, verbose: bool = False) -> str:
     """Render an enrichment report as Markdown.
 
     Args:
         report (EnrichmentReport): Report to render.
+        verbose (bool): Include raw LLM responses for matched bills.
 
     Returns:
         str: Markdown report text.
@@ -242,12 +246,15 @@ def renderReport(report: EnrichmentReport) -> str:
 
     lines.append("## Matched")
     if report.matched:
-        lines.extend(
-            f"- {os.path.basename(record.bill_path)} -> \"{record.description}\" | "
-            f"category: {record.category or '-'} | account: {record.account or '-'} | "
-            f"tags: {', '.join(record.tags) or '-'}"
-            for record in report.matched
-        )
+        for record in report.matched:
+            parts = (
+                f"- {os.path.basename(record.bill_path)} -> \"{record.description}\" | "
+                f"category: {record.category or '-'} | account: {record.account or '-'} | "
+                f"tags: {', '.join(record.tags) or '-'}"
+            )
+            if verbose and record.llm_response:
+                parts += f" | LLM: {record.llm_response}"
+            lines.append(parts)
     else:
         lines.append("- (none)")
 

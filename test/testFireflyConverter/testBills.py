@@ -130,6 +130,13 @@ class TestParseBillResponse(unittest.TestCase):
         self.assertEqual(bill.tags, [])
         self.assertEqual(bill.confidence, 0.0)
 
+    def testStoresRawLlmResponse(self):
+        raw = '```json\n{"total": 5.0, "vendor": "Bakery"}\n```'
+
+        bill = bills.parseBillResponse("bill.pdf", raw, raw_response=raw)
+
+        self.assertEqual(bill.llm_response, raw)
+
     def testParsesChosenAccount(self):
         bill = bills.parseBillResponse("bill.pdf", '{"total": 1.0, "account": "Groceries", "confidence": 0.9}')
 
@@ -352,11 +359,21 @@ class TestBillReader(unittest.TestCase):
             client = _FakeLlm('{"total": 12.34, "vendor": "ACME", "category": null, "tags": [], "confidence": 0.7}')
 
             reader = bills.BillReader(client, categories=[], tags=[], accounts=[])
-            reader.read(path)
+            bill = reader.read(path)
 
-            userContent = client.calls[0]["messages"][1]["content"]
-            self.assertIsInstance(userContent, str)
-            self.assertIn("12,34", userContent)
+            self.assertEqual(bill.vendor, "ACME")
+            self.assertEqual(bill.llm_response, '{"total": 12.34, "vendor": "ACME", "category": null, "tags": [], "confidence": 0.7}')
+
+    def testReadImageStoresLlmResponse(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = _writeBytes(directory, "bill.png", _TINY_PNG)
+            client = _FakeLlm('{"total": 5.0, "vendor": "Bakery", "category": null, "tags": [], "confidence": 0.8}')
+
+            reader = bills.BillReader(client, categories=["Food"], tags=[], accounts=[])
+            bill = reader.read(path)
+
+            self.assertEqual(bill.vendor, "Bakery")
+            self.assertEqual(bill.llm_response, '{"total": 5.0, "vendor": "Bakery", "category": null, "tags": [], "confidence": 0.8}')
 
 
 if __name__ == "__main__":

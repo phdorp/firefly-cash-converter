@@ -227,6 +227,32 @@ class TestBillEnricher(unittest.TestCase):
         self.assertIn("boom", text)
         self.assertIn("Tag 'y' dropped", text)
 
+    def testRenderReportVerboseIncludesLlmResponse(self):
+        report = be.EnrichmentReport(
+            matched=[
+                be.MatchRecord(
+                    bill_path="/b/a.pdf",
+                    description="money - Removal",
+                    category="Groceries",
+                    account="Restaurants",
+                    tags=["x"],
+                    llm_response='{"total": 115.0, "vendor": "money"}',
+                )
+            ],
+            unmatched=[],
+            ambiguous=[],
+            duplicates=[],
+            errors=[],
+            issues=[],
+        )
+
+        verbose = be.renderReport(report, verbose=True)
+        self.assertIn("money - Removal", verbose)
+        self.assertIn('"total": 115.0', verbose)
+
+        compact = be.renderReport(report, verbose=False)
+        self.assertNotIn('"total": 115.0', compact)
+
 
 if __name__ == "__main__":
     unittest.main()

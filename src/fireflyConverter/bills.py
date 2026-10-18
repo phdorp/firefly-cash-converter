@@ -240,12 +240,13 @@ def buildBillMessages(
     ]
 
 
-def parseBillResponse(path: str, content: str) -> data.Bill:
+def parseBillResponse(path: str, content: str, *, raw_response: str | None = None) -> data.Bill:
     """Parse an LLM response into a Bill.
 
     Args:
         path (str): Path of the source bill file, stored on the result.
         content (str): Raw assistant message content, optionally fenced.
+        raw_response (str | None): Original LLM response for verbose reporting.
 
     Returns:
         data.Bill: The extracted bill data.
@@ -273,6 +274,7 @@ def parseBillResponse(path: str, content: str) -> data.Bill:
         tags=_toStringList(payload.get("tags")),
         note=_toStr(payload.get("note")),
         confidence=confidence if confidence is not None else 0.0,
+        llm_response=raw_response,
     )
 
 
@@ -330,7 +332,7 @@ class BillReader:
         content = readBillContent(path, vision=self._vision, maxPages=self._maxPages)
         messages = buildBillMessages(content, self._categories, self._tags, self._accounts)
         response = self._llm.chat(messages, response_schema=BILL_RESPONSE_SCHEMA)
-        return parseBillResponse(path, response)
+        return parseBillResponse(path, response, raw_response=response)
 
 
 def _buildUserPrompt(categories: List[str], tags: List[str], accounts: List[str]) -> str:

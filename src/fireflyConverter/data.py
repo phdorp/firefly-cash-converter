@@ -321,6 +321,7 @@ class Bill:
         tags (list[str]): Tags chosen from the existing Firefly III tags.
         note (str | None): Short human-readable summary of the bill.
         confidence (float): Model confidence in the extraction, between 0 and 1.
+        llm_response (str | None): Raw LLM response text before parsing.
     """
 
     path: str
@@ -333,6 +334,7 @@ class Bill:
     tags: list[str] = dc.field(default_factory=list)
     note: str | None = None
     confidence: float = 0.0
+    llm_response: str | None = None
 
 
 @dc.dataclass

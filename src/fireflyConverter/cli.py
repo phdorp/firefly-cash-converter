@@ -92,6 +92,11 @@ def defineTransferParser(subparsers: _SubParsersAction):
         action="store_true",
         help="Enrich and report without transferring or archiving anything.",
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Include raw LLM responses in the enrichment report.",
+    )
 
 
 def defineConvertParser(subparsers: _SubParsersAction):
@@ -210,9 +215,10 @@ def transfer(arguments: Namespace):
 
     _validateRuleUsage(bool(arguments.apply_rules), arguments.apply_rule_groups, billConfig)
 
+    verbose = arguments.verbose if billConfig is not None else False
     if billConfig is not None:
         enricher, report = _runEnrichment(config, interface, billConfig, transactions, accountName)
-        _writeReport(billConfig.report_path, report)
+        _writeReport(billConfig.report_path, report, verbose=verbose)
 
     matchedTransactionIds = _matchedTransactionIds(report)
     autoLabeled = billDirectory is not None
@@ -220,7 +226,7 @@ def transfer(arguments: Namespace):
 
     if arguments.dry_run:
         if report is not None:
-            print(bce.renderReport(report))
+            print(bce.renderReport(report, verbose=verbose))
         for transaction in transactions:
             applyRules = _rulesApplyTo(transaction, matchedTransactionIds, applyRulesRequested)
             _tagAutoLabeled(transaction, applyRules, autoLabeled)
@@ -442,17 +448,18 @@ def _runEnrichment(
     return enricher, report
 
 
-def _writeReport(path: str | None, report: bce.EnrichmentReport) -> None:
+def _writeReport(path: str | None, report: bce.EnrichmentReport, verbose: bool = False) -> None:
     """Write the enrichment report to disk when a path is configured.
 
     Args:
         path (str | None): Destination of the report, or None to skip writing.
         report (bce.EnrichmentReport): Report to render.
+        verbose (bool): Include raw LLM responses in the report.
     """
     if not path:
         return
     with open(path, "w", encoding="utf-8") as handle:
-        handle.write(bce.renderReport(report))
+        handle.write(bce.renderReport(report, verbose=verbose))
     logger.info(f"Wrote bill enrichment report to {path}")
 
 
