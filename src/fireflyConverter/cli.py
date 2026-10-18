@@ -197,6 +197,7 @@ def transfer(arguments: Namespace):
     billDirectory = _configuredBillDirectory(arguments, config)
     if billDirectory:
         billConfig = _loadBillConfig(config, billDirectory)
+        _validateRuleGroupUsage(billConfig, arguments.apply_rule_groups)
         enricher, report = _runEnrichment(config, interface, billConfig, transactions)
         _writeReport(billConfig.report_path, report)
 
@@ -269,6 +270,26 @@ def _loadBillConfig(config: dict, directory: str) -> bce.BillConfig:
     section = dict(config.get("bills", {}))
     section["directory"] = directory
     return bce.BillConfig(**section)
+
+
+def _validateRuleGroupUsage(billConfig: Optional[bce.BillConfig], applyRuleGroups: Optional[List[str]]) -> None:
+    """Reject rule groups combined with bill enrichment.
+
+    Rule groups rewrite categories and tags, which would overwrite the values
+    the LLM just wrote for the matched bills.
+
+    Args:
+        billConfig (Optional[bce.BillConfig]): Enrichment configuration, or None when off.
+        applyRuleGroups (Optional[List[str]]): Rule group titles from the command line.
+
+    Raises:
+        ValueError: If both bill enrichment and rule groups are requested.
+    """
+    if billConfig is not None and applyRuleGroups:
+        raise ValueError(
+            "Rule groups cannot be combined with bill enrichment because they would "
+            "overwrite the category and tags written from the bills"
+        )
 
 
 def _runEnrichment(

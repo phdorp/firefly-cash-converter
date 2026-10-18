@@ -245,6 +245,20 @@ class TestBillDirectorySelection(unittest.TestCase):
         self.assertEqual(config.marker_tag, "bill-matched")
 
 
+class TestRuleGroupGuard(unittest.TestCase):
+    """Offline tests for the rule-group interaction with bill enrichment."""
+
+    def testRuleGroupsWithBillEnrichmentAreRejected(self):
+        with self.assertRaises(ValueError):
+            cli._validateRuleGroupUsage(object(), ["Test Rule Group"])
+
+    def testRuleGroupsWithoutBillEnrichmentAreAllowed(self):
+        cli._validateRuleGroupUsage(None, ["Test Rule Group"])
+
+    def testBillEnrichmentWithoutRuleGroupsIsAllowed(self):
+        cli._validateRuleGroupUsage(object(), None)
+
+
 class TestTransferWithBills(unittest.TestCase):
     def setUp(self):
         api_token = os.getenv("TEST_API_TOKEN")

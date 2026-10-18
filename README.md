@@ -167,7 +167,7 @@ model = "your-local-model"
 timeout_s = 120
 ```
 
-**Note:** do not combine bill-aware enrichment with `--apply_rule_groups`. The enrichment relies on the LLM output, and rule groups would overwrite the category and tags it writes.
+**Note:** bill-aware enrichment cannot be combined with `--apply_rule_groups`; the command refuses the combination with an error. The enrichment relies on the LLM output, and rule groups would overwrite the category and tags it writes.
 
 ### Filter Queries
 
