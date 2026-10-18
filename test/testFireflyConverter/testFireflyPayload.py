@@ -87,6 +87,51 @@ class TestPayloadFactory(unittest.TestCase):
             self.assertEqual(entry["external_id"], "source-1")
             self.assertTrue(entry["reconciled"])
 
+    def testSplitPayloadGetsGroupTitleFromDescription(self):
+        payload = self._postTransaction(
+            description="split bill",
+            splits=[
+                {"amount": 40.0, "category_name": "Food"},
+                {"amount": 60.0, "category_name": "Books"},
+            ],
+        )
+
+        self.assertEqual(len(payload["transactions"]), 2)
+        self.assertEqual(payload["group_title"], "split bill")
+
+    def testSplitTransactionsOnDataclassGetGroupTitle(self):
+        payload = self._factory.toPayload(
+            _tx(
+                description="bill with splits",
+                split_transactions=[
+                    data.TransactionSplit(amount=40.0, category_name="Food"),
+                    data.TransactionSplit(amount=60.0, category_name="Books"),
+                ],
+            )
+        )
+
+        self.assertEqual(len(payload["transactions"]), 2)
+        self.assertEqual(payload["group_title"], "bill with splits")
+
+    def testExplicitGroupTitleIsPreservedForSplits(self):
+        payload = self._postTransaction(
+            description="split bill",
+            group_title="custom group",
+            splits=[
+                {"amount": 40.0, "category_name": "Food"},
+                {"amount": 60.0, "category_name": "Books"},
+            ],
+        )
+
+        self.assertEqual(len(payload["transactions"]), 2)
+        self.assertEqual(payload["group_title"], "custom group")
+
+    def testSingleTransactionPayloadHasNoGroupTitle(self):
+        payload = self._postTransaction(description="single")
+
+        self.assertEqual(len(payload["transactions"]), 1)
+        self.assertNotIn("group_title", payload)
+
 
 class TestApplyRules(unittest.TestCase):
     def setUp(self) -> None:

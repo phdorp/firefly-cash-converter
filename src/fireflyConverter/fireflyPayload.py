@@ -221,7 +221,9 @@ class PayloadFactory:
             due_date (Optional[str]): Due date. Defaults to None.
             payment_date (Optional[str]): Payment date. Defaults to None.
             invoice_date (Optional[str]): Invoice date. Defaults to None.
-            group_title (Optional[str]): Title for transaction group. Defaults to None.
+            group_title (Optional[str]): Title for transaction group. Defaults to None;
+                falls back to the description when multiple transactions are emitted,
+                as Firefly III requires a group title for split transactions.
             apply_rules (bool): Whether to apply Firefly III rules. Defaults to False.
             fire_webhooks (bool): Whether to fire webhooks. Defaults to True.
 
@@ -334,6 +336,11 @@ class PayloadFactory:
                 )
                 for index, split in enumerate(splits)
             ]
+
+        # Firefly III rejects payloads with more than one transaction unless a
+        # group title is present; use the description as the default.
+        if len(transactionEntries) > 1 and not _hasValue(group_title):
+            group_title = description
 
         # Build the payload wrapper
         payload: dict[str, Any] = {
