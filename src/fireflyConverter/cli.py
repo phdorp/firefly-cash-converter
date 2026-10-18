@@ -210,9 +210,6 @@ def transfer(arguments: Namespace):
         logger.info("Dry run completed; no transactions were transferred")
         return
 
-    if enricher is not None and billConfig.move_processed:
-        enricher.archiveProcessed(report)
-
     logger.info(f"Transferring {len(transactions)} transactions to Firefly III")
     processed_count = 0
     for transaction in transactions:
@@ -224,6 +221,9 @@ def transfer(arguments: Namespace):
             logger.info(f"Transaction {processed_count}/{len(transactions)} processed with status: {response.status_code}")
 
     logger.info(f"Transfer command completed successfully. Processed {processed_count} transactions")
+
+    if enricher is not None and billConfig.move_processed:
+        enricher.archiveProcessed(report)
 
     if arguments.apply_rule_groups:
         logger.info(f"Applying rule groups: {arguments.apply_rule_groups}")

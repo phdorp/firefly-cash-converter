@@ -174,14 +174,40 @@ class BillEnricher:
     def archiveProcessed(self, report: EnrichmentReport) -> None:
         """Move successfully applied bills into the processed subfolder.
 
+        Existing files are never overwritten: a name collision is resolved by
+        appending a counter, so an earlier audit copy is preserved.
+
         Args:
             report (EnrichmentReport): Report whose matched bills should be archived.
         """
+        if not report.matched:
+            return
+
         target = os.path.join(self._config.directory, self._config.processed_subdir)
         os.makedirs(target, exist_ok=True)
         for record in report.matched:
-            logger.info(f"Archiving bill: {record.bill_path}")
-            shutil.move(record.bill_path, os.path.join(target, os.path.basename(record.bill_path)))
+            destination = _uniqueTarget(target, os.path.basename(record.bill_path))
+            logger.info(f"Archiving bill: {record.bill_path} -> {destination}")
+            shutil.move(record.bill_path, destination)
+
+
+def _uniqueTarget(directory: str, filename: str) -> str:
+    """Return a path inside directory that does not exist yet.
+
+    Args:
+        directory (str): Directory the file is moved into.
+        filename (str): Preferred file name.
+
+    Returns:
+        str: An unused path, with a counter suffix when the name is taken.
+    """
+    base, extension = os.path.splitext(filename)
+    candidate = os.path.join(directory, filename)
+    counter = 1
+    while os.path.exists(candidate):
+        candidate = os.path.join(directory, f"{base}-{counter}{extension}")
+        counter += 1
+    return candidate
 
 
 def renderReport(report: EnrichmentReport) -> str:

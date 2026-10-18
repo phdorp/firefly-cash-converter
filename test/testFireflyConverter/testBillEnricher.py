@@ -124,6 +124,32 @@ class TestBillEnricher(unittest.TestCase):
             self.assertTrue(os.path.exists(archived))
             self.assertFalse(os.path.exists(billPath))
 
+    def testArchiveProcessedKeepsExistingArchivedFileWithSameName(self):
+        with tempfile.TemporaryDirectory() as directory:
+            billPath = _write(directory, "acme.pdf", "new")
+            os.makedirs(os.path.join(directory, "processed"), exist_ok=True)
+            _write(os.path.join(directory, "processed"), "acme.pdf", "old")
+            reader = _StubReader({billPath: data.Bill(path=billPath, total=115.0, date="2025-08-01", vendor="money")})
+            config = be.BillConfig(directory=directory)
+            enricher = be.BillEnricher(reader, categories=[], tags=[], config=config)
+            report = enricher.enrich([_tx(115.0, "2025-08-01", "money - Removal")])
+
+            enricher.archiveProcessed(report)
+
+            with open(os.path.join(directory, "processed", "acme.pdf"), encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), "old")
+            with open(os.path.join(directory, "processed", "acme-1.pdf"), encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), "new")
+            self.assertFalse(os.path.exists(billPath))
+
+    def testArchiveProcessedCreatesNothingWhenNothingMatched(self):
+        with tempfile.TemporaryDirectory() as directory:
+            enricher = be.BillEnricher(_StubReader({}), categories=[], tags=[], config=be.BillConfig(directory=directory))
+
+            enricher.archiveProcessed(be.EnrichmentReport())
+
+            self.assertFalse(os.path.exists(os.path.join(directory, "processed")))
+
     def testRenderReportListsOutcomes(self):
         report = be.EnrichmentReport(
             matched=[be.MatchRecord(bill_path="/b/a.pdf", description="money - Removal", category="Groceries", tags=["x"])],

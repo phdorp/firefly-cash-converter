@@ -292,6 +292,73 @@ class TestTransferWithBills(unittest.TestCase):
         self.assertIn("money - Removal", report)
         self.assertIn("acme.pdf", report)
 
+    @mock.patch.object(llmInterface, "LLMInterface", _FakeLlm)
+    def testRunPostsTransactionsThenArchivesBills(self):
+        test_dir = os.path.dirname(__file__)
+        test_data_dir = os.path.normpath(os.path.join(test_dir, "..", "data"))
+        self._fireflyInterface.createAccount(data.PostAssetAccount(name="tr"))
+        self._writeConfig()
+        billPath = self._writeBill()
+
+        parser = ArgumentParser()
+        cli.defineTransferParser(parser.add_subparsers(dest="command"))
+        args = parser.parse_args(
+            [
+                "transfer",
+                "common",
+                "--config_path",
+                self._tempConfig.name,
+                "--input_directory",
+                test_data_dir,
+                "--input_name",
+                "common",
+                "--account_name",
+                "tr",
+                "--bills_directory",
+                self._tempBills.name,
+            ]
+        )
+
+        cli.transfer(args)
+
+        self.assertEqual(len(self._fireflyInterface.getTransactions(limit=100, page=1)), 5)
+        self.assertFalse(os.path.exists(billPath), "Matched bill should be archived")
+        self.assertTrue(os.path.exists(os.path.join(self._tempBills.name, "processed", "acme.pdf")))
+
+    @mock.patch.object(llmInterface, "LLMInterface", _FakeLlm)
+    def testFailedTransferDoesNotArchiveBills(self):
+        test_dir = os.path.dirname(__file__)
+        test_data_dir = os.path.normpath(os.path.join(test_dir, "..", "data"))
+        self._fireflyInterface.createAccount(data.PostAssetAccount(name="tr"))
+        self._writeConfig()
+        billPath = self._writeBill()
+
+        parser = ArgumentParser()
+        cli.defineTransferParser(parser.add_subparsers(dest="command"))
+        args = parser.parse_args(
+            [
+                "transfer",
+                "common",
+                "--config_path",
+                self._tempConfig.name,
+                "--input_directory",
+                test_data_dir,
+                "--input_name",
+                "common",
+                "--account_name",
+                "tr",
+                "--bills_directory",
+                self._tempBills.name,
+            ]
+        )
+
+        with mock.patch.object(ffi.FireflyInterface, "createTransaction", side_effect=RuntimeError("boom")):
+            with self.assertRaises(RuntimeError):
+                cli.transfer(args)
+
+        self.assertTrue(os.path.exists(billPath), "Bills must survive a failed transfer")
+        self.assertFalse(os.path.exists(os.path.join(self._tempBills.name, "processed", "acme.pdf")))
+
 
 if __name__ == "__main__":
     unittest.main()
