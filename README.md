@@ -20,11 +20,12 @@ or from [PyPI](https://pypi.org/project/firefly-cash-converter/)
 ```bash
 pip install firefly-cash-converter
 
+```
+
 For iPhone HEIC/HEIF photo support, install the optional extra:
 
 ```bash
 pip install "firefly-cash-converter[heic]"
-```
 ```
 
 This will install the `cash` command-line tool for converting and transferring financial transactions.
@@ -112,6 +113,7 @@ cash transfer <source> [options]
 - `--apply_rules`: Let Firefly III run all of its rules on each transaction while it is imported. Cannot be combined with `--apply_rule_groups`.
 - `--bills_directory`: Directory of bill documents to map onto the transferred transactions (see [Bill-aware enrichment](#bill-aware-enrichment))
 - `--dry_run`: Enrich and report without transferring or archiving anything.
+- `--verbose`: Include raw LLM responses in the bill enrichment report.
 
 **Example with manual file:**
 
