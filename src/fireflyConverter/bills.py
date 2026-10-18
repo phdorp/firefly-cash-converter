@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import dataclasses as dc
 import json
 import logging
@@ -7,11 +8,22 @@ import os
 import re
 from typing import Any, Dict, List, Optional
 
+import pymupdf
+
 from fireflyConverter import data
 
 logger = logging.getLogger(__name__)
 
 BILL_EXTENSIONS: tuple[str, ...] = (".pdf", ".png", ".jpg", ".jpeg", ".webp")
+
+IMAGE_MIME_TYPES: Dict[str, str] = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+}
+
+PDF_TEXT_MIN_CHARS = 20
 
 SYSTEM_PROMPT = (
     "You extract structured data from a single invoice or receipt. "
@@ -83,6 +95,64 @@ def discoverBills(directory: str, extensions: tuple[str, ...] = BILL_EXTENSIONS)
     return sorted(found)
 
 
+def readBillContent(path: str, vision: bool = True, maxPages: int = 1) -> BillContent:
+    """Read a bill file into text or an image for the LLM.
+
+    Digital PDFs are reduced to their text layer. When that layer is too short
+    to be useful, or absent, the first page is rasterized and returned as an
+    image so the vision model can read it. Image files are returned directly.
+
+    Args:
+        path (str): Path of the bill file.
+        vision (bool): Whether rasterizing to an image is allowed. Defaults to True.
+        maxPages (int): Number of PDF pages to consider for text extraction.
+
+    Returns:
+        BillContent: Extracted text or an image data URI.
+
+    Raises:
+        BillExtractionError: If the file type is not a supported bill format.
+    """
+    extension = os.path.splitext(path)[1].lower()
+
+    if extension == ".pdf":
+        return _readPdfContent(path, vision, maxPages)
+
+    mimeType = IMAGE_MIME_TYPES.get(extension)
+    if mimeType is None:
+        raise BillExtractionError(f"Unsupported bill file type: {path}")
+
+    return BillContent(imageDataUri=_toDataUri(_readBytes(path), mimeType))
+
+
+def _readPdfContent(path: str, vision: bool, maxPages: int) -> BillContent:
+    """Extract a PDF's text layer, falling back to a rendered first page."""
+    with pymupdf.open(path) as document:
+        text = _extractPdfText(document, maxPages)
+        if len(text.strip()) >= PDF_TEXT_MIN_CHARS or not vision or document.page_count == 0:
+            return BillContent(text=text)
+
+        pixmap = document.load_page(0).get_pixmap()
+        return BillContent(imageDataUri=_toDataUri(pixmap.tobytes("png"), "image/png"))
+
+
+def _extractPdfText(document: "pymupdf.Document", maxPages: int) -> str:
+    """Return the concatenated text of up to maxPages pages."""
+    pageCount = min(maxPages, document.page_count)
+    return "\n".join(document.load_page(index).get_text() for index in range(pageCount))
+
+
+def _readBytes(path: str) -> bytes:
+    """Read a file's raw bytes."""
+    with open(path, "rb") as handle:
+        return handle.read()
+
+
+def _toDataUri(raw: bytes, mimeType: str) -> str:
+    """Encode raw bytes as a base64 data URI for the vision API."""
+    return f"data:{mimeType};base64,{base64.b64encode(raw).decode('ascii')}"
+
+
 def buildBillMessages(content: BillContent, categories: List[str], tags: List[str]) -> List[Dict[str, Any]]:
     """Build the chat messages that ask the LLM to read one bill.
 
@@ -143,6 +213,59 @@ def parseBillResponse(path: str, content: str) -> data.Bill:
         note=_toStr(payload.get("note")),
         confidence=confidence if confidence is not None else 0.0,
     )
+
+
+class BillReader:
+    """Read bills and extract structured data with an LLM.
+
+    Attributes:
+        _llm (Any): Chat client exposing a ``chat(messages, response_schema=...)`` method.
+        _categories (List[str]): Category names offered to the model.
+        _tags (List[str]): Tag names offered to the model.
+        _vision (bool): Whether image fallback is allowed for scanned bills.
+        _maxPages (int): Number of PDF pages considered for text extraction.
+    """
+
+    def __init__(
+        self,
+        llm: Any,
+        categories: List[str],
+        tags: List[str],
+        vision: bool = True,
+        maxPages: int = 1,
+    ) -> None:
+        """Initialize the reader.
+
+        Args:
+            llm (Any): Chat client (see ``llmInterface.LLMInterface``).
+            categories (List[str]): Existing Firefly III category names.
+            tags (List[str]): Existing Firefly III tag names.
+            vision (bool): Allow rasterizing scanned bills. Defaults to True.
+            maxPages (int): Number of PDF pages to read text from. Defaults to 1.
+        """
+        self._llm = llm
+        self._categories = list(categories)
+        self._tags = list(tags)
+        self._vision = vision
+        self._maxPages = maxPages
+
+    def read(self, path: str) -> data.Bill:
+        """Read a bill file and return the extracted data.
+
+        Args:
+            path (str): Path of the bill file.
+
+        Returns:
+            data.Bill: Extracted bill data.
+
+        Raises:
+            BillExtractionError: If the file cannot be read or the response parsed.
+        """
+        logger.info(f"Reading bill: {path}")
+        content = readBillContent(path, vision=self._vision, maxPages=self._maxPages)
+        messages = buildBillMessages(content, self._categories, self._tags)
+        response = self._llm.chat(messages, response_schema=BILL_RESPONSE_SCHEMA)
+        return parseBillResponse(path, response)
 
 
 def _buildUserPrompt(categories: List[str], tags: List[str]) -> str:

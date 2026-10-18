@@ -1,9 +1,17 @@
+import base64
 import json
 import os
 import tempfile
 import unittest
 
+import pymupdf
+
 from fireflyConverter import bills
+
+# A 1x1 transparent PNG, enough to exercise image handling without image tooling.
+_TINY_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+)
 
 
 def _write(directory, name, content=""):
@@ -12,6 +20,36 @@ def _write(directory, name, content=""):
     with open(path, "w", encoding="utf-8") as handle:
         handle.write(content)
     return path
+
+
+def _writeBytes(directory, name, content):
+    path = os.path.join(directory, name)
+    with open(path, "wb") as handle:
+        handle.write(content)
+    return path
+
+
+def _writePdf(directory, name, text=None):
+    path = os.path.join(directory, name)
+    document = pymupdf.open()
+    page = document.new_page()
+    if text:
+        page.insert_text((72, 72), text)
+    document.save(path)
+    document.close()
+    return path
+
+
+class _FakeLlm:
+    """Records chat calls and returns a fixed assistant message."""
+
+    def __init__(self, content):
+        self._content = content
+        self.calls = []
+
+    def chat(self, messages, response_schema=None, temperature=0.0):
+        self.calls.append({"messages": messages, "response_schema": response_schema})
+        return self._content
 
 
 class TestParseBillResponse(unittest.TestCase):
@@ -110,6 +148,81 @@ class TestBuildBillMessages(unittest.TestCase):
         imageParts = [part for part in userContent if part["type"] == "image_url"]
         self.assertEqual(len(imageParts), 1)
         self.assertEqual(imageParts[0]["image_url"]["url"], "data:image/png;base64,AAAA")
+
+
+class TestReadBillContent(unittest.TestCase):
+    def testImageFileBecomesDataUri(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = _writeBytes(directory, "bill.png", _TINY_PNG)
+
+            content = bills.readBillContent(path)
+
+            self.assertIsNone(content.text)
+            self.assertTrue(content.imageDataUri.startswith("data:image/png;base64,"))
+
+    def testPdfWithTextLayerUsesText(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = _writePdf(directory, "bill.pdf", text="Invoice total: 12,34 EUR due 2026-10-01")
+
+            content = bills.readBillContent(path)
+
+            self.assertIsNone(content.imageDataUri)
+            self.assertIn("12,34", content.text)
+
+    def testScannedPdfFallsBackToImage(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = _writePdf(directory, "scan.pdf", text=None)
+
+            content = bills.readBillContent(path)
+
+            self.assertIsNone(content.text)
+            self.assertTrue(content.imageDataUri.startswith("data:image/png;base64,"))
+
+    def testUnsupportedTypeRaises(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = _write(directory, "bill.txt", "hello")
+
+            with self.assertRaises(bills.BillExtractionError):
+                bills.readBillContent(path)
+
+    def testScannedPdfWithoutVisionReturnsEmptyText(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = _writePdf(directory, "scan.pdf", text=None)
+
+            content = bills.readBillContent(path, vision=False)
+
+            self.assertIsNone(content.imageDataUri)
+            self.assertEqual(content.text.strip(), "")
+
+
+class TestBillReader(unittest.TestCase):
+    def testReadParsesClientResponseAndSendsSchema(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = _writeBytes(directory, "bill.png", _TINY_PNG)
+            client = _FakeLlm('{"total": 5.0, "vendor": "Bakery", "category": "Food", "tags": [], "confidence": 0.8}')
+
+            reader = bills.BillReader(client, categories=["Food"], tags=["business"])
+            bill = reader.read(path)
+
+            self.assertEqual(bill.path, path)
+            self.assertEqual(bill.total, 5.0)
+            self.assertEqual(bill.vendor, "Bakery")
+            self.assertIs(client.calls[0]["response_schema"], bills.BILL_RESPONSE_SCHEMA)
+
+            userContent = client.calls[0]["messages"][1]["content"]
+            self.assertTrue(any(part["type"] == "image_url" for part in userContent))
+
+    def testReadSendsExtractedTextForDigitalPdf(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = _writePdf(directory, "bill.pdf", text="Invoice total: 12,34 EUR due 2026-10-01")
+            client = _FakeLlm('{"total": 12.34, "vendor": "ACME", "category": null, "tags": [], "confidence": 0.7}')
+
+            reader = bills.BillReader(client, categories=[], tags=[])
+            reader.read(path)
+
+            userContent = client.calls[0]["messages"][1]["content"]
+            self.assertIsInstance(userContent, str)
+            self.assertIn("12,34", userContent)
 
 
 if __name__ == "__main__":
