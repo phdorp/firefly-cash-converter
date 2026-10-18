@@ -22,10 +22,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+heic = [
+    "pillow-heif>=1.8",
+]
 dev = [
     "python-dotenv",
     "pytest",
     "pytest-cov",
+    "pillow-heif>=1.8",
 ]
 test = [
     "python-dotenv",
