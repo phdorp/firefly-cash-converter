@@ -231,6 +231,17 @@ class TestApplyBill(unittest.TestCase):
         self.assertIs(outcome.transaction, transaction)
         self.assertEqual(outcome.additional_bills, [second])
 
+    def testSplitMatchAlwaysIncludesPrimaryBill(self):
+        transaction = _tx(10.0, "2026-10-01", "Shop")
+        primary = _bill(path="/bills/primary.pdf", total=4.0, date="2026-10-01", vendor="Shop")
+        firstCandidate = _bill(path="/bills/first.pdf", total=3.0, date="2026-10-01", vendor="Shop")
+        secondCandidate = _bill(path="/bills/second.pdf", total=7.0, date="2026-10-01", vendor="Shop")
+
+        outcome = bm.BillMatcher([transaction]).match(primary, [firstCandidate, secondCandidate])
+
+        self.assertEqual(outcome.status, bm.NO_CANDIDATE)
+        self.assertIsNone(outcome.transaction)
+
     def testSplitEntriesKeepTheirOwnCategoriesAndNotes(self):
         transaction = _tx(10.0, "2026-10-01", "Shop")
         first = _bill(total=4.0, category="Food", note="meal", date="2026-10-01", vendor="Shop", confidence=0.9)

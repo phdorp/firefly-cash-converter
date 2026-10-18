@@ -172,7 +172,7 @@ class BillMatcher:
                 <= self._amountTolerance
             ):
                 return MatchOutcome(AMBIGUOUS, overflow_bills=candidates)
-            group = self._findBillGroup(candidates, transaction, maxSplitBills)
+            group = self._findBillGroup(candidates, transaction, maxSplitBills, bill)
             if group is not None:
                 matchingBills, overflowBills = group
                 if len(matchingBills) > 1:
@@ -192,6 +192,7 @@ class BillMatcher:
         candidates: Sequence[data.Bill],
         transaction: data.BaseTransaction,
         maxSplitBills: int,
+        primaryBill: data.Bill,
     ) -> Optional[Tuple[List[data.Bill], List[data.Bill]]]:
         """Find a bill subset whose totals equal a transaction amount."""
         if transaction.amount is None:
@@ -205,6 +206,8 @@ class BillMatcher:
                 seenIds.add(id(candidate))
         for size in range(2, min(maxSplitBills, len(uniqueCandidates)) + 1):
             for groupTuple in combinations(uniqueCandidates, size):
+                if primaryBill not in groupTuple:
+                    continue
                 total = sum(float(candidate.total) for candidate in groupTuple if candidate.total is not None)
                 if abs(total - float(transaction.amount)) <= self._amountTolerance:
                     matched = list(groupTuple)
