@@ -93,6 +93,14 @@ class TestBillMatcher(unittest.TestCase):
         self.assertEqual(second.status, "already_matched")
         self.assertIsNone(second.transaction)
 
+    def testReportsUniqueDirectCandidateWithoutClaimingIt(self):
+        transaction = _tx(12.34, "2026-10-01", "ACME GmbH")
+        bill = _bill(total=12.34, date="2026-10-01", vendor="ACME GmbH")
+        matcher = bm.BillMatcher([transaction])
+
+        self.assertIs(matcher.uniqueTransactionCandidate(bill), transaction)
+        self.assertEqual(matcher.match(bill).status, bm.MATCHED)
+
     def testSecondBillTakesTheRemainingUnclaimedTransaction(self):
         firstTransaction = _tx(9.99, "2026-10-01", "Shop")
         secondTransaction = _tx(9.99, "2026-10-02", "Shop")

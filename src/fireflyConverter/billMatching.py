@@ -143,6 +143,13 @@ class BillMatcher:
             return MatchOutcome(ALREADY_MATCHED)
         return MatchOutcome(NO_CANDIDATE)
 
+    def uniqueTransactionCandidate(self, bill: data.Bill) -> Optional[data.BaseTransaction]:
+        """Return the sole direct transaction candidate for a bill, if any."""
+        if bill.total is None:
+            return None
+        candidates = [transaction for transaction in self._transactions if self._isCandidate(bill, transaction)]
+        return candidates[0] if len(candidates) == 1 else None
+
     def _matchSplit(
         self,
         bill: data.Bill,

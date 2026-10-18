@@ -170,6 +170,9 @@ class BillEnricher:
                 report.llm_responses[bill.path] = bill.llm_response
 
         consumedPaths: set[str] = set()
+        uniquelyMatchedPaths = {
+            bill.path for bill in loadedBills if matcher.uniqueTransactionCandidate(bill) is not None
+        }
         for index, bill in enumerate(loadedBills):
             if bill.path in consumedPaths:
                 continue
@@ -179,7 +182,7 @@ class BillEnricher:
                 additional_bills=[
                     candidate
                     for candidate in loadedBills[index + 1 :]
-                    if candidate.path not in consumedPaths
+                    if candidate.path not in consumedPaths and candidate.path not in uniquelyMatchedPaths
                 ],
                 max_split_bills=self._config.max_split_bills,
             )
