@@ -29,6 +29,7 @@ SYSTEM_PROMPT = (
     "You extract structured data from a single invoice or receipt. "
     "Reply only with JSON matching the requested schema. Use ISO dates (YYYY-MM-DD). "
     "'total' is the gross amount to pay. Choose 'category' only from the provided list, "
+    "using the exact name, or null if none fits. Choose 'account' only from the provided list, "
     "using the exact name, or null if none fits. Choose 'tags' only from the provided list. "
     "Set 'confidence' between 0 and 1 to reflect how certain the extraction is."
 )
@@ -41,6 +42,7 @@ BILL_RESPONSE_SCHEMA: Dict[str, Any] = {
         "date": {"type": ["string", "null"]},
         "vendor": {"type": ["string", "null"]},
         "category": {"type": ["string", "null"]},
+        "account": {"type": ["string", "null"]},
         "tags": {"type": "array", "items": {"type": "string"}},
         "note": {"type": ["string", "null"]},
         "confidence": {"type": "number"},
@@ -157,18 +159,21 @@ def _toDataUri(raw: bytes, mimeType: str) -> str:
     return f"data:{mimeType};base64,{base64.b64encode(raw).decode('ascii')}"
 
 
-def buildBillMessages(content: BillContent, categories: List[str], tags: List[str]) -> List[Dict[str, Any]]:
+def buildBillMessages(
+    content: BillContent, categories: List[str], tags: List[str], accounts: List[str]
+) -> List[Dict[str, Any]]:
     """Build the chat messages that ask the LLM to read one bill.
 
     Args:
         content (BillContent): Text or image content of the bill.
         categories (List[str]): Category names the model may choose from.
         tags (List[str]): Tag names the model may choose from.
+        accounts (List[str]): Account names the model may choose from.
 
     Returns:
         List[Dict[str, Any]]: System and user messages in OpenAI chat format.
     """
-    prompt = _buildUserPrompt(categories, tags)
+    prompt = _buildUserPrompt(categories, tags, accounts)
 
     if content.text is not None:
         userContent: Any = f"{prompt}\n\nBill text:\n\"\"\"\n{content.text}\n\"\"\""
@@ -213,6 +218,7 @@ def parseBillResponse(path: str, content: str) -> data.Bill:
         date=_toStr(payload.get("date")),
         vendor=_toStr(payload.get("vendor")),
         category=_toStr(payload.get("category")),
+        account=_toStr(payload.get("account")),
         tags=_toStringList(payload.get("tags")),
         note=_toStr(payload.get("note")),
         confidence=confidence if confidence is not None else 0.0,
@@ -226,6 +232,7 @@ class BillReader:
         _llm (Any): Chat client exposing a ``chat(messages, response_schema=...)`` method.
         _categories (List[str]): Category names offered to the model.
         _tags (List[str]): Tag names offered to the model.
+        _accounts (List[str]): Account names offered to the model.
         _vision (bool): Whether image fallback is allowed for scanned bills.
         _maxPages (int): Number of PDF pages considered for text extraction.
     """
@@ -235,6 +242,7 @@ class BillReader:
         llm: Any,
         categories: List[str],
         tags: List[str],
+        accounts: List[str],
         vision: bool = True,
         maxPages: int = 1,
     ) -> None:
@@ -244,12 +252,14 @@ class BillReader:
             llm (Any): Chat client (see ``llmInterface.LLMInterface``).
             categories (List[str]): Existing Firefly III category names.
             tags (List[str]): Existing Firefly III tag names.
+            accounts (List[str]): Existing Firefly III account names.
             vision (bool): Allow rasterizing scanned bills. Defaults to True.
             maxPages (int): Number of PDF pages to read text from. Defaults to 1.
         """
         self._llm = llm
         self._categories = list(categories)
         self._tags = list(tags)
+        self._accounts = list(accounts)
         self._vision = vision
         self._maxPages = maxPages
 
@@ -267,19 +277,21 @@ class BillReader:
         """
         logger.info(f"Reading bill: {path}")
         content = readBillContent(path, vision=self._vision, maxPages=self._maxPages)
-        messages = buildBillMessages(content, self._categories, self._tags)
+        messages = buildBillMessages(content, self._categories, self._tags, self._accounts)
         response = self._llm.chat(messages, response_schema=BILL_RESPONSE_SCHEMA)
         return parseBillResponse(path, response)
 
 
-def _buildUserPrompt(categories: List[str], tags: List[str]) -> str:
-    """Render the user prompt including the allowed category and tag names."""
+def _buildUserPrompt(categories: List[str], tags: List[str], accounts: List[str]) -> str:
+    """Render the user prompt including the allowed category, tag and account names."""
     categoryList = ", ".join(categories) if categories else "(none defined)"
     tagList = ", ".join(tags) if tags else "(none defined)"
+    accountList = ", ".join(accounts) if accounts else "(none defined)"
     return (
         "Read the attached bill and return total, currency, date, vendor, category, "
-        "tags, note and confidence.\n"
+        "account, tags, note and confidence.\n"
         f"Categories (choose exactly one name or null): {categoryList}\n"
+        f"Accounts (choose exactly one name or null): {accountList}\n"
         f"Tags (choose zero or more names): {tagList}"
     )
 

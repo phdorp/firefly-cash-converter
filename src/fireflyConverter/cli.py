@@ -211,7 +211,7 @@ def transfer(arguments: Namespace):
     _validateRuleUsage(bool(arguments.apply_rules), arguments.apply_rule_groups, billConfig)
 
     if billConfig is not None:
-        enricher, report = _runEnrichment(config, interface, billConfig, transactions)
+        enricher, report = _runEnrichment(config, interface, billConfig, transactions, accountName)
         _writeReport(billConfig.report_path, report)
 
     matchedTransactionIds = _matchedTransactionIds(report)
@@ -383,19 +383,43 @@ def _tagAutoLabeled(transaction: data.BaseTransaction, applyRules: bool, autoLab
         transaction.tags = tags + [AUTO_LABELED_TAG]
 
 
+def _accountNamesForBills(interface: ffi.FireflyInterface, accountName: Optional[str], enabled: bool) -> List[str]:
+    """Return the account names a bill may be mapped to.
+
+    Only accounts that are not disabled are offered, and the account the
+    transactions are imported into is skipped so a bill can never become its
+    own counter-account.
+
+    Args:
+        interface (ffi.FireflyInterface): Interface used to read the existing accounts.
+        accountName (Optional[str]): Account the transactions are imported into.
+        enabled (bool): Whether the bills may set the counter-account.
+
+    Returns:
+        List[str]: Account names offered to the reader, empty when disabled.
+    """
+    if not enabled:
+        return []
+    logger.info("Loading existing accounts from Firefly III")
+    accounts = interface.getAccounts()
+    return [account.name for account in accounts if account.active is not False and account.name != accountName]
+
+
 def _runEnrichment(
     config: dict,
     interface: ffi.FireflyInterface,
     billConfig: bce.BillConfig,
     transactions: List[data.BaseTransaction],
+    accountName: Optional[str],
 ) -> tuple[bce.BillEnricher, bce.EnrichmentReport]:
     """Read bills with the local LLM and enrich the matching transactions.
 
     Args:
         config (dict): Parsed configuration file, expected to hold an ``[llm]`` section.
-        interface (ffi.FireflyInterface): Interface used to read existing categories and tags.
+        interface (ffi.FireflyInterface): Interface used to read existing categories, tags and accounts.
         billConfig (bce.BillConfig): Enrichment configuration.
         transactions (List[data.BaseTransaction]): Transactions of the current import.
+        accountName (Optional[str]): Account the transactions are imported into.
 
     Returns:
         tuple[bce.BillEnricher, bce.EnrichmentReport]: The enricher and the per-bill report.
@@ -410,9 +434,10 @@ def _runEnrichment(
     logger.info("Loading existing categories and tags from Firefly III")
     categories = interface.getCategories()
     tags = interface.getTags()
+    accounts = _accountNamesForBills(interface, accountName, billConfig.accounts)
 
-    reader = bls.BillReader(client, categories, tags, vision=billConfig.vision, maxPages=billConfig.max_pages)
-    enricher = bce.BillEnricher(reader, categories, tags, billConfig)
+    reader = bls.BillReader(client, categories, tags, accounts, vision=billConfig.vision, maxPages=billConfig.max_pages)
+    enricher = bce.BillEnricher(reader, categories, tags, accounts, billConfig)
     report = enricher.enrich(transactions)
     return enricher, report
 

@@ -91,8 +91,14 @@ class TestParseBillResponse(unittest.TestCase):
         bill = bills.parseBillResponse("bill.pdf", "{}")
 
         self.assertIsNone(bill.total)
+        self.assertIsNone(bill.account)
         self.assertEqual(bill.tags, [])
         self.assertEqual(bill.confidence, 0.0)
+
+    def testParsesChosenAccount(self):
+        bill = bills.parseBillResponse("bill.pdf", '{"total": 1.0, "account": "Groceries", "confidence": 0.9}')
+
+        self.assertEqual(bill.account, "Groceries")
 
     def testCoercesNumericStrings(self):
         bill = bills.parseBillResponse("bill.pdf", '{"total": "12.34", "confidence": "0.5"}')
@@ -128,7 +134,7 @@ class TestBuildBillMessages(unittest.TestCase):
     def testTextContentEmbedsTextAndVocabulary(self):
         content = bills.BillContent(text="Total 12,34 EUR")
 
-        messages = bills.buildBillMessages(content, categories=["Groceries"], tags=["business"])
+        messages = bills.buildBillMessages(content, categories=["Groceries"], tags=["business"], accounts=["Groceries"])
 
         self.assertEqual(messages[0]["role"], "system")
         self.assertEqual(messages[1]["role"], "user")
@@ -138,10 +144,20 @@ class TestBuildBillMessages(unittest.TestCase):
         self.assertIn("business", userContent)
         self.assertIn("Total 12,34 EUR", userContent)
 
+    def testTextContentEmbedsAccountVocabulary(self):
+        content = bills.BillContent(text="Total 12,34 EUR")
+
+        messages = bills.buildBillMessages(
+            content, categories=[], tags=[], accounts=["Assets:Checking", "Restaurants"]
+        )
+
+        userContent = messages[1]["content"]
+        self.assertIn("Restaurants", userContent)
+
     def testImageContentAttachesImageUrl(self):
         content = bills.BillContent(imageDataUri="data:image/png;base64,AAAA")
 
-        messages = bills.buildBillMessages(content, categories=[], tags=[])
+        messages = bills.buildBillMessages(content, categories=[], tags=[], accounts=[])
 
         userContent = messages[1]["content"]
         self.assertIsInstance(userContent, list)
@@ -208,7 +224,7 @@ class TestBillReader(unittest.TestCase):
             path = _writeBytes(directory, "bill.png", _TINY_PNG)
             client = _FakeLlm('{"total": 5.0, "vendor": "Bakery", "category": "Food", "tags": [], "confidence": 0.8}')
 
-            reader = bills.BillReader(client, categories=["Food"], tags=["business"])
+            reader = bills.BillReader(client, categories=["Food"], tags=["business"], accounts=[])
             bill = reader.read(path)
 
             self.assertEqual(bill.path, path)
@@ -219,12 +235,23 @@ class TestBillReader(unittest.TestCase):
             userContent = client.calls[0]["messages"][1]["content"]
             self.assertTrue(any(part["type"] == "image_url" for part in userContent))
 
+    def testReadOffersAccountsToTheModel(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = _writePdf(directory, "bill.pdf", text="Invoice total: 12,34 EUR due 2026-10-01")
+            client = _FakeLlm('{"total": 12.34, "account": "Restaurants", "confidence": 0.7}')
+
+            reader = bills.BillReader(client, categories=[], tags=[], accounts=["Restaurants"])
+            bill = reader.read(path)
+
+            self.assertEqual(bill.account, "Restaurants")
+            self.assertIn("Restaurants", client.calls[0]["messages"][1]["content"])
+
     def testReadSendsExtractedTextForDigitalPdf(self):
         with tempfile.TemporaryDirectory() as directory:
             path = _writePdf(directory, "bill.pdf", text="Invoice total: 12,34 EUR due 2026-10-01")
             client = _FakeLlm('{"total": 12.34, "vendor": "ACME", "category": null, "tags": [], "confidence": 0.7}')
 
-            reader = bills.BillReader(client, categories=[], tags=[])
+            reader = bills.BillReader(client, categories=[], tags=[], accounts=[])
             reader.read(path)
 
             userContent = client.calls[0]["messages"][1]["content"]

@@ -158,22 +158,25 @@ def applyBill(
     transaction: data.BaseTransaction,
     categories: Sequence[str],
     tags: Sequence[str],
+    accounts: Sequence[str],
     markerTag: Optional[str] = "bill-matched",
     confidenceThreshold: float = 0.5,
 ) -> List[str]:
-    """Write bill-derived category, tags and notes onto a transaction.
+    """Write bill-derived category, account, tags and notes onto a transaction.
 
-    The category and tags are restricted to the values that already exist, and
-    a low-confidence extraction applies neither. Notes and the marker tag are
-    always written so the enrichment remains traceable.
+    The category, account and tags are restricted to the values that already
+    exist, a low-confidence extraction applies none of them, and an existing
+    counter-account is never overwritten. Notes and the marker tag are always
+    written so the enrichment remains traceable.
 
     Args:
         bill (data.Bill): The matched bill.
         transaction (data.BaseTransaction): Transaction to enrich in place.
         categories (Sequence[str]): Existing Firefly III category names.
         tags (Sequence[str]): Existing Firefly III tag names.
+        accounts (Sequence[str]): Existing Firefly III account names.
         markerTag (Optional[str]): Audit tag added to enriched transactions. Defaults to "bill-matched".
-        confidenceThreshold (float): Minimum confidence to apply category and tags. Defaults to 0.5.
+        confidenceThreshold (float): Minimum confidence to apply category, account and tags. Defaults to 0.5.
 
     Returns:
         List[str]: Human-readable issues to include in the report.
@@ -183,13 +186,16 @@ def applyBill(
 
     if bill.confidence < confidenceThreshold:
         issues.append(
-            f"Low confidence ({bill.confidence:.2f} < {confidenceThreshold}); category and tags left empty"
+            f"Low confidence ({bill.confidence:.2f} < {confidenceThreshold}); "
+            "category, account and tags left empty"
         )
     else:
-        category = _canonicalCategory(bill.category, categories)
+        category = _canonicalName(bill.category, categories)
         if bill.category and category is None:
             issues.append(f"Category '{bill.category}' is not defined in Firefly III; left empty")
         transaction.category_name = category
+
+        issues.extend(_applyAccount(bill, transaction, accounts))
 
         resolvedTags, unknownTags = _canonicalTags(bill.tags, tags)
         for unknown in unknownTags:
@@ -203,13 +209,41 @@ def applyBill(
     return issues
 
 
-def _canonicalCategory(name: Optional[str], categories: Sequence[str]) -> Optional[str]:
-    """Return the existing category matching name case-insensitively, or None."""
+def _applyAccount(bill: data.Bill, transaction: data.BaseTransaction, accounts: Sequence[str]) -> List[str]:
+    """Set the bill's counter-account on the transaction unless one is already set.
+
+    An empty account vocabulary means the mapping is off, or that Firefly III
+    holds no account to choose from; the transaction is then left untouched
+    without an issue, because nothing could be mapped.
+
+    Args:
+        bill (data.Bill): The matched bill.
+        transaction (data.BaseTransaction): Transaction to enrich in place.
+        accounts (Sequence[str]): Existing Firefly III account names.
+
+    Returns:
+        List[str]: Human-readable issues to include in the report.
+    """
+    account = _canonicalName(bill.account, accounts)
+    if account is None:
+        if bill.account and accounts:
+            return [f"Account '{bill.account}' is not defined in Firefly III; left empty"]
+        return []
+    if transaction.destination_name:
+        if _canonicalName(transaction.destination_name, [account]) is not None:
+            return []
+        return [f"Kept existing account '{transaction.destination_name}'; bill suggested '{account}'"]
+    transaction.destination_name = account
+    return []
+
+
+def _canonicalName(name: Optional[str], candidates: Sequence[str]) -> Optional[str]:
+    """Return the existing name matching name case-insensitively, or None."""
     if not name:
         return None
-    for category in categories:
-        if category.strip().lower() == name.strip().lower():
-            return category
+    for candidate in candidates:
+        if candidate.strip().lower() == name.strip().lower():
+            return candidate
     return None
 
 

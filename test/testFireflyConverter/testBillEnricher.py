@@ -49,7 +49,7 @@ class TestBillEnricher(unittest.TestCase):
                 }
             )
             transaction = _tx(115.0, "2025-08-01", "money - Removal")
-            enricher = be.BillEnricher(reader, categories=["Groceries"], tags=[], config=be.BillConfig(directory=directory))
+            enricher = be.BillEnricher(reader, categories=["Groceries"], tags=[], accounts=[], config=be.BillConfig(directory=directory))
 
             report = enricher.enrich([transaction])
 
@@ -76,7 +76,7 @@ class TestBillEnricher(unittest.TestCase):
             )
             matchedTx = _tx(115.0, "2025-08-01", "money - Removal")
             untouchedTx = _tx(9.0, "2025-08-02", "coffee")
-            enricher = be.BillEnricher(reader, categories=["Groceries"], tags=[], config=be.BillConfig(directory=directory))
+            enricher = be.BillEnricher(reader, categories=["Groceries"], tags=[], accounts=[], config=be.BillConfig(directory=directory))
 
             report = enricher.enrich([matchedTx, untouchedTx])
 
@@ -86,7 +86,7 @@ class TestBillEnricher(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             billPath = _write(directory, "acme.pdf")
             reader = _StubReader({billPath: data.Bill(path=billPath, total=999.0, date="2025-08-01", vendor="money")})
-            enricher = be.BillEnricher(reader, categories=[], tags=[], config=be.BillConfig(directory=directory))
+            enricher = be.BillEnricher(reader, categories=[], tags=[], accounts=[], config=be.BillConfig(directory=directory))
 
             report = enricher.enrich([_tx(115.0, "2025-08-01", "money - Removal")])
 
@@ -98,7 +98,7 @@ class TestBillEnricher(unittest.TestCase):
             billPath = _write(directory, "acme.pdf")
             reader = _StubReader({billPath: data.Bill(path=billPath, total=9.99, date="2025-08-01", vendor="Shop")})
             transactions = [_tx(9.99, "2025-08-01", "Shop"), _tx(9.99, "2025-08-02", "Shop")]
-            enricher = be.BillEnricher(reader, categories=[], tags=[], config=be.BillConfig(directory=directory))
+            enricher = be.BillEnricher(reader, categories=[], tags=[], accounts=[], config=be.BillConfig(directory=directory))
 
             report = enricher.enrich(transactions)
 
@@ -115,7 +115,7 @@ class TestBillEnricher(unittest.TestCase):
                     secondPath: data.Bill(path=secondPath, total=115.0, date="2025-08-01", vendor="money"),
                 }
             )
-            enricher = be.BillEnricher(reader, categories=[], tags=[], config=be.BillConfig(directory=directory))
+            enricher = be.BillEnricher(reader, categories=[], tags=[], accounts=[], config=be.BillConfig(directory=directory))
 
             report = enricher.enrich([_tx(115.0, "2025-08-01", "money - Removal")])
 
@@ -127,7 +127,7 @@ class TestBillEnricher(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             billPath = _write(directory, "broken.pdf")
             reader = _StubReader({billPath: bills.BillExtractionError("boom")})
-            enricher = be.BillEnricher(reader, categories=[], tags=[], config=be.BillConfig(directory=directory))
+            enricher = be.BillEnricher(reader, categories=[], tags=[], accounts=[], config=be.BillConfig(directory=directory))
 
             report = enricher.enrich([_tx(115.0, "2025-08-01", "money - Removal")])
 
@@ -139,7 +139,7 @@ class TestBillEnricher(unittest.TestCase):
             billPath = _write(directory, "acme.pdf")
             reader = _StubReader({billPath: data.Bill(path=billPath, total=115.0, date="2025-08-01", vendor="money")})
             config = be.BillConfig(directory=directory, processed_subdir="processed")
-            enricher = be.BillEnricher(reader, categories=[], tags=[], config=config)
+            enricher = be.BillEnricher(reader, categories=[], tags=[], accounts=[], config=config)
             report = enricher.enrich([_tx(115.0, "2025-08-01", "money - Removal")])
 
             enricher.archiveProcessed(report)
@@ -155,7 +155,7 @@ class TestBillEnricher(unittest.TestCase):
             _write(os.path.join(directory, "processed"), "acme.pdf", "old")
             reader = _StubReader({billPath: data.Bill(path=billPath, total=115.0, date="2025-08-01", vendor="money")})
             config = be.BillConfig(directory=directory)
-            enricher = be.BillEnricher(reader, categories=[], tags=[], config=config)
+            enricher = be.BillEnricher(reader, categories=[], tags=[], accounts=[], config=config)
             report = enricher.enrich([_tx(115.0, "2025-08-01", "money - Removal")])
 
             enricher.archiveProcessed(report)
@@ -168,15 +168,48 @@ class TestBillEnricher(unittest.TestCase):
 
     def testArchiveProcessedCreatesNothingWhenNothingMatched(self):
         with tempfile.TemporaryDirectory() as directory:
-            enricher = be.BillEnricher(_StubReader({}), categories=[], tags=[], config=be.BillConfig(directory=directory))
+            enricher = be.BillEnricher(_StubReader({}), categories=[], tags=[], accounts=[], config=be.BillConfig(directory=directory))
 
             enricher.archiveProcessed(be.EnrichmentReport())
 
             self.assertFalse(os.path.exists(os.path.join(directory, "processed")))
 
+    def testReportListsTheChosenCounterAccount(self):
+        with tempfile.TemporaryDirectory() as directory:
+            billPath = _write(directory, "acme.pdf")
+            reader = _StubReader(
+                {
+                    billPath: data.Bill(
+                        path=billPath,
+                        total=115.0,
+                        date="2025-08-01",
+                        vendor="money",
+                        account="Restaurants",
+                        confidence=0.9,
+                    )
+                }
+            )
+            transaction = _tx(115.0, "2025-08-01", "money - Removal")
+            enricher = be.BillEnricher(
+                reader, categories=[], tags=[], accounts=["Restaurants"], config=be.BillConfig(directory=directory)
+            )
+
+            report = enricher.enrich([transaction])
+
+            self.assertEqual(transaction.destination_name, "Restaurants")
+            self.assertEqual(report.matched[0].account, "Restaurants")
+
     def testRenderReportListsOutcomes(self):
         report = be.EnrichmentReport(
-            matched=[be.MatchRecord(bill_path="/b/a.pdf", description="money - Removal", category="Groceries", tags=["x"])],
+            matched=[
+                be.MatchRecord(
+                    bill_path="/b/a.pdf",
+                    description="money - Removal",
+                    category="Groceries",
+                    account="Restaurants",
+                    tags=["x"],
+                )
+            ],
             unmatched=["/b/b.pdf"],
             ambiguous=[],
             duplicates=["/b/d.pdf"],
@@ -188,6 +221,7 @@ class TestBillEnricher(unittest.TestCase):
 
         self.assertIn("Matched", text)
         self.assertIn("a.pdf", text)
+        self.assertIn("Restaurants", text)
         self.assertIn("/b/b.pdf", text)
         self.assertIn("/b/d.pdf", text)
         self.assertIn("boom", text)

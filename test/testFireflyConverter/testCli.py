@@ -1,5 +1,6 @@
 import os
 import tempfile
+import types
 import unittest
 from argparse import ArgumentParser, Namespace
 from unittest import mock
@@ -189,7 +190,8 @@ class _FakeLlm:
     def chat(self, messages, response_schema=None, temperature=0.0):
         return (
             '{"total": 115.0, "currency": "EUR", "date": "2025-08-01", "vendor": "money", '
-            '"category": "Groceries", "tags": [], "note": "Invoice 7", "confidence": 0.9}'
+            '"category": "Groceries", "account": "Groceries", "tags": [], "note": "Invoice 7", '
+            '"confidence": 0.9}'
         )
 
 
@@ -345,6 +347,39 @@ class TestRuleApplicationTargets(unittest.TestCase):
         self.assertEqual(cli._matchedTransactionIds(None), set())
 
 
+class TestBillAccountPool(unittest.TestCase):
+    """Offline tests for the accounts offered to the bill reader."""
+
+    def _accounts(self, *pairs):
+        return [types.SimpleNamespace(name=name, active=active) for name, active in pairs]
+
+    def testReturnsActiveAccountsWithoutTheImportedOne(self):
+        interface = mock.Mock()
+        interface.getAccounts.return_value = self._accounts(
+            ("tr", True), ("Groceries", True), ("Closed account", False)
+        )
+
+        accounts = cli._accountNamesForBills(interface, "tr", enabled=True)
+
+        self.assertEqual(accounts, ["Groceries"])
+
+    def testAccountsWithoutAnActiveFlagAreKept(self):
+        interface = mock.Mock()
+        interface.getAccounts.return_value = self._accounts(("Groceries", None))
+
+        accounts = cli._accountNamesForBills(interface, "tr", enabled=True)
+
+        self.assertEqual(accounts, ["Groceries"])
+
+    def testReturnsNothingWhenAccountMappingIsOff(self):
+        interface = mock.Mock()
+
+        accounts = cli._accountNamesForBills(interface, "tr", enabled=False)
+
+        self.assertEqual(accounts, [])
+        interface.getAccounts.assert_not_called()
+
+
 class TestTransferWithBills(unittest.TestCase):
     def setUp(self):
         api_token = os.getenv("TEST_API_TOKEN")
@@ -366,13 +401,13 @@ class TestTransferWithBills(unittest.TestCase):
         self._fireflyInterface.deleteRuleGroups()
         self._fireflyInterface.purgeUserData()
 
-    def _writeConfig(self):
+    def _writeConfig(self, accounts=True):
         api_token = os.getenv("TEST_API_TOKEN")
         self._tempConfig.write(
             f'[firefly_interface]\nbase_url = "http://localhost"\napi_token = "{api_token}"\n'
             'duplicate_transaction = "ignore"\n\n'
-            '[bills]\nreport_path = "%s"\n\n'
-            '[llm]\nbase_url = "http://127.0.0.1:1234/v1"\nmodel = "test"\n' % self._reportPath
+            f'[bills]\nreport_path = "{self._reportPath}"\naccounts = {str(accounts).lower()}\n\n'
+            '[llm]\nbase_url = "http://127.0.0.1:1234/v1"\nmodel = "test"\n'
         )
         self._tempConfig.flush()
         self._tempConfig.close()
@@ -456,6 +491,76 @@ class TestTransferWithBills(unittest.TestCase):
         self.assertEqual(len(self._fireflyInterface.getTransactions(limit=100, page=1)), 5)
         self.assertFalse(os.path.exists(billPath), "Matched bill should be archived")
         self.assertTrue(os.path.exists(os.path.join(self._tempBills.name, "processed", "acme.pdf")))
+
+    @mock.patch.object(llmInterface, "LLMInterface", _FakeLlm)
+    def testBillSetsTheCounterAccount(self):
+        test_dir = os.path.dirname(__file__)
+        test_data_dir = os.path.normpath(os.path.join(test_dir, "..", "data"))
+        self._fireflyInterface.createAccount(data.PostAssetAccount(name="tr"))
+        self._fireflyInterface.createAccount(data.PostExpenseAccount(name="Groceries"))
+        self._writeConfig()
+        self._writeBill()
+
+        parser = ArgumentParser()
+        cli.defineTransferParser(parser.add_subparsers(dest="command"))
+        args = parser.parse_args(
+            [
+                "transfer",
+                "common",
+                "--config_path",
+                self._tempConfig.name,
+                "--input_directory",
+                test_data_dir,
+                "--input_name",
+                "common",
+                "--account_name",
+                "tr",
+                "--bills_directory",
+                self._tempBills.name,
+            ]
+        )
+
+        cli.transfer(args)
+
+        transactions = self._fireflyInterface.getTransactions(limit=100, page=1)
+        billMatched = [transaction for transaction in transactions if transaction.description == "money - Removal"]
+        self.assertEqual(len(billMatched), 1, "Exactly one transaction should be bill-matched")
+        self.assertEqual(billMatched[0].destination_name, "Groceries")
+
+    @mock.patch.object(llmInterface, "LLMInterface", _FakeLlm)
+    def testCounterAccountIsLeftAloneWhenMappingIsOff(self):
+        test_dir = os.path.dirname(__file__)
+        test_data_dir = os.path.normpath(os.path.join(test_dir, "..", "data"))
+        self._fireflyInterface.createAccount(data.PostAssetAccount(name="tr"))
+        self._fireflyInterface.createAccount(data.PostExpenseAccount(name="Groceries"))
+        self._writeConfig(accounts=False)
+        self._writeBill()
+
+        parser = ArgumentParser()
+        cli.defineTransferParser(parser.add_subparsers(dest="command"))
+        args = parser.parse_args(
+            [
+                "transfer",
+                "common",
+                "--config_path",
+                self._tempConfig.name,
+                "--input_directory",
+                test_data_dir,
+                "--input_name",
+                "common",
+                "--account_name",
+                "tr",
+                "--bills_directory",
+                self._tempBills.name,
+            ]
+        )
+
+        cli.transfer(args)
+
+        transactions = self._fireflyInterface.getTransactions(limit=100, page=1)
+        billMatched = [transaction for transaction in transactions if transaction.description == "money - Removal"]
+        self.assertEqual(len(billMatched), 1, "Exactly one transaction should be bill-matched")
+        self.assertNotEqual(billMatched[0].destination_name, "Groceries")
 
     @mock.patch.object(llmInterface, "LLMInterface", _FakeLlm)
     def testApplyRulesLabelsOnlyTheNonBillTransactions(self):

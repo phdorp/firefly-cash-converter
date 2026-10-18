@@ -317,6 +317,7 @@ class Bill:
         date (str | None): Bill date in ISO 8601 (YYYY-MM-DD) format.
         vendor (str | None): Merchant or issuer name.
         category (str | None): Category chosen from the existing Firefly III categories.
+        account (str | None): Counter-account chosen from the existing Firefly III accounts.
         tags (list[str]): Tags chosen from the existing Firefly III tags.
         note (str | None): Short human-readable summary of the bill.
         confidence (float): Model confidence in the extraction, between 0 and 1.
@@ -328,6 +329,7 @@ class Bill:
     date: str | None = None
     vendor: str | None = None
     category: str | None = None
+    account: str | None = None
     tags: list[str] = dc.field(default_factory=list)
     note: str | None = None
     confidence: float = 0.0

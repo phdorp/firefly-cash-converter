@@ -30,6 +30,7 @@ class BillConfig:
         report_path (str): Where the enrichment report is written.
         vision (bool): Whether scanned bills may be rasterized for the vision model.
         max_pages (int): Number of PDF pages considered for text extraction.
+        accounts (bool): Whether bills may also set the transaction's counter-account.
     """
 
     directory: str
@@ -43,6 +44,7 @@ class BillConfig:
     report_path: str = "bills-report.md"
     vision: bool = True
     max_pages: int = 1
+    accounts: bool = True
 
 
 @dc.dataclass
@@ -53,6 +55,7 @@ class MatchRecord:
         bill_path (str): Path of the matched bill file.
         description (str): Description of the enriched transaction.
         category (str | None): Category written onto the transaction.
+        account (str | None): Counter-account written onto the transaction.
         tags (List[str]): Tags written onto the transaction.
     """
 
@@ -60,6 +63,7 @@ class MatchRecord:
     description: str
     category: Optional[str]
     tags: List[str]
+    account: Optional[str] = None
 
 
 @dc.dataclass
@@ -92,6 +96,7 @@ class BillEnricher:
         _reader (Any): Bill reader exposing a ``read(path)`` method.
         _categories (List[str]): Existing Firefly III category names.
         _tags (List[str]): Existing Firefly III tag names.
+        _accounts (List[str]): Existing Firefly III account names.
         _config (BillConfig): Enrichment configuration.
     """
 
@@ -100,6 +105,7 @@ class BillEnricher:
         reader: Any,
         categories: Sequence[str],
         tags: Sequence[str],
+        accounts: Sequence[str],
         config: BillConfig,
     ) -> None:
         """Initialize the enricher.
@@ -108,11 +114,13 @@ class BillEnricher:
             reader (Any): Bill reader (see ``bills.BillReader``).
             categories (Sequence[str]): Existing Firefly III category names.
             tags (Sequence[str]): Existing Firefly III tag names.
+            accounts (Sequence[str]): Existing Firefly III account names.
             config (BillConfig): Enrichment configuration.
         """
         self._reader = reader
         self._categories = list(categories)
         self._tags = list(tags)
+        self._accounts = list(accounts)
         self._config = config
 
     def enrich(self, transactions: Sequence[data.BaseTransaction]) -> EnrichmentReport:
@@ -152,6 +160,7 @@ class BillEnricher:
                     outcome.transaction,
                     self._categories,
                     self._tags,
+                    self._accounts,
                     markerTag=self._config.marker_tag,
                     confidenceThreshold=self._config.confidence_threshold,
                 )
@@ -161,6 +170,7 @@ class BillEnricher:
                         bill_path=path,
                         description=outcome.transaction.description,
                         category=outcome.transaction.category_name,
+                        account=outcome.transaction.destination_name,
                         tags=list(outcome.transaction.tags or []),
                     )
                 )
@@ -234,7 +244,8 @@ def renderReport(report: EnrichmentReport) -> str:
     if report.matched:
         lines.extend(
             f"- {os.path.basename(record.bill_path)} -> \"{record.description}\" | "
-            f"category: {record.category or '-'} | tags: {', '.join(record.tags) or '-'}"
+            f"category: {record.category or '-'} | account: {record.account or '-'} | "
+            f"tags: {', '.join(record.tags) or '-'}"
             for record in report.matched
         )
     else:

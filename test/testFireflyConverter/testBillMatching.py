@@ -115,6 +115,7 @@ class TestApplyBill(unittest.TestCase):
             transaction,
             categories=["Groceries"],
             tags=["business"],
+            accounts=[],
             markerTag="bill-matched",
             confidenceThreshold=0.5,
         )
@@ -129,7 +130,7 @@ class TestApplyBill(unittest.TestCase):
         transaction = _tx(12.34, "2026-10-01", "ACME GmbH")
         bill = _bill(category="Travel", tags=[], note=None, confidence=0.9)
 
-        issues = bm.applyBill(bill, transaction, categories=["Groceries"], tags=[], markerTag="bill-matched")
+        issues = bm.applyBill(bill, transaction, categories=["Groceries"], tags=[], accounts=[], markerTag="bill-matched")
 
         self.assertIsNone(transaction.category_name)
         self.assertTrue(any("Travel" in issue for issue in issues))
@@ -138,7 +139,7 @@ class TestApplyBill(unittest.TestCase):
         transaction = _tx(12.34, "2026-10-01", "ACME GmbH")
         bill = _bill(category=None, tags=["nonsense"], note=None, confidence=0.9)
 
-        issues = bm.applyBill(bill, transaction, categories=[], tags=["business"], markerTag="bill-matched")
+        issues = bm.applyBill(bill, transaction, categories=[], tags=["business"], accounts=[], markerTag="bill-matched")
 
         self.assertEqual(transaction.tags, ["bill-matched"])
         self.assertTrue(any("nonsense" in issue for issue in issues))
@@ -152,6 +153,7 @@ class TestApplyBill(unittest.TestCase):
             transaction,
             categories=["Groceries"],
             tags=["business"],
+            accounts=[],
             markerTag="bill-matched",
             confidenceThreshold=0.5,
         )
@@ -165,10 +167,58 @@ class TestApplyBill(unittest.TestCase):
         transaction.notes = "existing note"
         bill = _bill(category=None, tags=[], note="Invoice 42", confidence=0.9)
 
-        bm.applyBill(bill, transaction, categories=[], tags=[])
+        bm.applyBill(bill, transaction, categories=[], tags=[], accounts=[])
 
         self.assertIn("existing note", transaction.notes)
         self.assertIn("Invoice 42", transaction.notes)
+
+    def testSetsCanonicalCounterAccount(self):
+        transaction = _tx(12.34, "2026-10-01", "ACME GmbH")
+        bill = _bill(account="restaurants", confidence=0.9)
+
+        issues = bm.applyBill(bill, transaction, categories=[], tags=[], accounts=["Restaurants"])
+
+        self.assertEqual(transaction.destination_name, "Restaurants")
+        self.assertEqual(issues, [])
+
+    def testUnknownAccountIsDroppedAndReported(self):
+        transaction = _tx(12.34, "2026-10-01", "ACME GmbH")
+        bill = _bill(account="Travel", confidence=0.9)
+
+        issues = bm.applyBill(bill, transaction, categories=[], tags=[], accounts=["Groceries"])
+
+        self.assertIsNone(transaction.destination_name)
+        self.assertTrue(any("Travel" in issue for issue in issues))
+
+    def testNoAccountVocabularyLeavesTheTransactionAlone(self):
+        transaction = _tx(12.34, "2026-10-01", "ACME GmbH")
+        bill = _bill(account="Groceries", confidence=0.9)
+
+        issues = bm.applyBill(bill, transaction, categories=[], tags=[], accounts=[])
+
+        self.assertIsNone(transaction.destination_name)
+        self.assertEqual(issues, [])
+
+    def testExistingCounterAccountIsKeptAndReported(self):
+        transaction = _tx(12.34, "2026-10-01", "ACME GmbH")
+        transaction.destination_name = "Old Merchant"
+        bill = _bill(account="Restaurants", confidence=0.9)
+
+        issues = bm.applyBill(bill, transaction, categories=[], tags=[], accounts=["Restaurants"])
+
+        self.assertEqual(transaction.destination_name, "Old Merchant")
+        self.assertTrue(any("Old Merchant" in issue for issue in issues))
+
+    def testLowConfidenceSkipsAccountToo(self):
+        transaction = _tx(12.34, "2026-10-01", "ACME GmbH")
+        bill = _bill(account="Restaurants", confidence=0.2)
+
+        issues = bm.applyBill(
+            bill, transaction, categories=[], tags=[], accounts=["Restaurants"], confidenceThreshold=0.5
+        )
+
+        self.assertIsNone(transaction.destination_name)
+        self.assertTrue(any("confidence" in issue.lower() for issue in issues))
 
 
 if __name__ == "__main__":
