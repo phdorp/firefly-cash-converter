@@ -1,7 +1,15 @@
 import json
 import unittest
 
+from fireflyConverter import data
 from fireflyConverter.fireflyPayload import PayloadFactory
+
+
+def _tx(**overrides):
+    """Build a postable transaction with only the required fields set."""
+    values = {"date": "2025-01-01", "amount": 10.0, "description": "test", "type": "withdrawal"}
+    values.update(overrides)
+    return data.PostTransaction(**values)
 
 
 class TestPayloadFactory(unittest.TestCase):
@@ -59,6 +67,85 @@ class TestPayloadFactory(unittest.TestCase):
         self.assertEqual(transaction["source_name"], "account")
         self.assertEqual(transaction["foreign_amount"], 42.5)
         self.assertEqual(transaction["notes"], "note")
+
+    def testSplitEntriesAreEmittedInsteadOfOneAggregateEntry(self):
+        payload = self._postTransaction(
+            currency_code="EUR",
+            external_id="source-1",
+            reconciled=True,
+            splits=[
+                {"amount": 40.0, "category_name": "Food", "notes": "first"},
+                {"amount": 60.0, "category_name": "Books", "tags": ["bill-matched"]},
+            ]
+        )
+
+        self.assertEqual([entry["amount"] for entry in payload["transactions"]], ["40.0", "60.0"])
+        self.assertEqual(payload["transactions"][0]["category_name"], "Food")
+        self.assertEqual(payload["transactions"][1]["tags"], ["bill-matched"])
+        for entry in payload["transactions"]:
+            self.assertEqual(entry["currency_code"], "EUR")
+            self.assertEqual(entry["external_id"], "source-1")
+            self.assertTrue(entry["reconciled"])
+
+    def testSplitPayloadGetsGroupTitleFromDescription(self):
+        payload = self._postTransaction(
+            description="split bill",
+            splits=[
+                {"amount": 40.0, "category_name": "Food"},
+                {"amount": 60.0, "category_name": "Books"},
+            ],
+        )
+
+        self.assertEqual(len(payload["transactions"]), 2)
+        self.assertEqual(payload["group_title"], "split bill")
+
+    def testSplitTransactionsOnDataclassGetGroupTitle(self):
+        payload = self._factory.toPayload(
+            _tx(
+                description="bill with splits",
+                split_transactions=[
+                    data.TransactionSplit(amount=40.0, category_name="Food"),
+                    data.TransactionSplit(amount=60.0, category_name="Books"),
+                ],
+            )
+        )
+
+        self.assertEqual(len(payload["transactions"]), 2)
+        self.assertEqual(payload["group_title"], "bill with splits")
+
+    def testExplicitGroupTitleIsPreservedForSplits(self):
+        payload = self._postTransaction(
+            description="split bill",
+            group_title="custom group",
+            splits=[
+                {"amount": 40.0, "category_name": "Food"},
+                {"amount": 60.0, "category_name": "Books"},
+            ],
+        )
+
+        self.assertEqual(len(payload["transactions"]), 2)
+        self.assertEqual(payload["group_title"], "custom group")
+
+    def testSingleTransactionPayloadHasNoGroupTitle(self):
+        payload = self._postTransaction(description="single")
+
+        self.assertEqual(len(payload["transactions"]), 1)
+        self.assertNotIn("group_title", payload)
+
+
+class TestApplyRules(unittest.TestCase):
+    def setUp(self) -> None:
+        self._factory = PayloadFactory()
+
+    def testApplyRulesDefaultsToOff(self):
+        payload = self._factory.toPayload(_tx())
+
+        self.assertFalse(payload["apply_rules"])
+
+    def testApplyRulesIsThreadedThroughToPayload(self):
+        payload = self._factory.toPayload(_tx(), apply_rules=True)
+
+        self.assertTrue(payload["apply_rules"])
 
 
 if __name__ == "__main__":

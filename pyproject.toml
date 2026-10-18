@@ -17,18 +17,25 @@ dependencies = [
     "numpy",
     "openpyxl",
     "toml",
-    "requests"
+    "requests",
+    "pymupdf>=1.24",
 ]
 
 [project.optional-dependencies]
-dev = [
-    "python-dotenv",
-    "pytest",
-    "pytest-cov",
+heic = [
+    "pillow-heif>=1.8",
 ]
 test = [
     "python-dotenv",
     "pytest",
+]
+
+[dependency-groups]
+dev = [
+    "python-dotenv",
+    "pytest",
+    "pytest-cov",
+    "pillow-heif>=1.8",
 ]
 
 [build-system]

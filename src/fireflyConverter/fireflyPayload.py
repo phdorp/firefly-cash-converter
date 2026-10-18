@@ -1,7 +1,7 @@
 import math
 from typing import Any, Optional, Union, overload
 
-from fireflyConverter.data import BaseTransaction, PostAccount, PostRule, PostRuleGroup
+from fireflyConverter.data import BaseTransaction, PostAccount, PostRule, PostRuleGroup, TransactionSplit
 
 
 def _hasValue(value: Any) -> bool:
@@ -32,7 +32,7 @@ class PayloadFactory:
         self._duplicate_transaction_check = duplicate_transaction_check
 
     @overload
-    def toPayload(self, data: BaseTransaction) -> dict[str, Any]:
+    def toPayload(self, data: BaseTransaction, apply_rules: bool = False) -> dict[str, Any]:
         """Convert a BaseTransaction to a payload dictionary."""
 
     @overload
@@ -47,7 +47,9 @@ class PayloadFactory:
     def toPayload(self, data: PostRuleGroup) -> dict[str, Any]:
         """Convert a PostRuleGroup to a payload dictionary."""
 
-    def toPayload(self, data: Union[BaseTransaction, PostAccount, PostRule, PostRuleGroup]) -> dict[str, Any]:
+    def toPayload(
+        self, data: Union[BaseTransaction, PostAccount, PostRule, PostRuleGroup], apply_rules: bool = False
+    ) -> dict[str, Any]:
         """Convert transaction, account, rule, or rule group data to a payload dictionary.
 
         Routes the conversion based on the input data type to the appropriate
@@ -55,6 +57,8 @@ class PayloadFactory:
 
         Args:
             data (Union[BaseTransaction, PostAccount, PostRule, PostRuleGroup]): The data object to convert.
+            apply_rules (bool): Whether Firefly III should run its rules on the
+                created transaction. Only used for transactions. Defaults to False.
 
         Returns:
             dict[str, Any]: API-compatible payload dictionary.
@@ -65,7 +69,7 @@ class PayloadFactory:
         if isinstance(data, PostAccount):
             return self._toAccountPayload(data)
         elif isinstance(data, BaseTransaction):
-            return self._toTransactionPayload(data)
+            return self._toTransactionPayload(data, apply_rules)
         elif isinstance(data, PostRule):
             return self._toRulePayload(data)
         elif isinstance(data, PostRuleGroup):
@@ -73,16 +77,20 @@ class PayloadFactory:
         else:
             raise TypeError(f"Unsupported data type for payload conversion: {type(data)}")
 
-    def _toTransactionPayload(self, transaction: BaseTransaction) -> dict[str, Any]:
+    def _toTransactionPayload(self, transaction: BaseTransaction, apply_rules: bool = False) -> dict[str, Any]:
         """Convert a BaseTransaction to a transaction payload.
 
         Args:
             transaction (BaseTransaction): The transaction to convert.
+            apply_rules (bool): Whether Firefly III should run its rules on the
+                created transaction. Defaults to False.
 
         Returns:
             dict[str, Any]: Transaction payload dictionary.
         """
-        return self.postTransaction(**transaction.__dict__)
+        values = dict(transaction.__dict__)
+        splits = values.pop("split_transactions", None)
+        return self.postTransaction(**values, splits=splits, apply_rules=apply_rules)
 
     def _toAccountPayload(self, account: PostAccount) -> dict[str, Any]:
         """Convert a PostAccount to an account payload.
@@ -162,6 +170,7 @@ class PayloadFactory:
         group_title: Optional[str] = None,
         apply_rules: bool = False,
         fire_webhooks: bool = True,
+        splits: Optional[list[TransactionSplit | dict[str, Any]]] = None,
     ) -> dict[str, Any]:
         """Build a transaction payload for the Firefly III API.
 
@@ -212,7 +221,9 @@ class PayloadFactory:
             due_date (Optional[str]): Due date. Defaults to None.
             payment_date (Optional[str]): Payment date. Defaults to None.
             invoice_date (Optional[str]): Invoice date. Defaults to None.
-            group_title (Optional[str]): Title for transaction group. Defaults to None.
+            group_title (Optional[str]): Title for transaction group. Defaults to None;
+                falls back to the description when multiple transactions are emitted,
+                as Firefly III requires a group title for split transactions.
             apply_rules (bool): Whether to apply Firefly III rules. Defaults to False.
             fire_webhooks (bool): Whether to fire webhooks. Defaults to True.
 
@@ -315,12 +326,28 @@ class PayloadFactory:
         if _hasValue(invoice_date):
             transaction["invoice_date"] = invoice_date
 
+        transactionEntries = [transaction]
+        if splits:
+            transactionEntries = [
+                self._splitPayload(
+                    split,
+                    parent=transaction,
+                    order=index,
+                )
+                for index, split in enumerate(splits)
+            ]
+
+        # Firefly III rejects payloads with more than one transaction unless a
+        # group title is present; use the description as the default.
+        if len(transactionEntries) > 1 and not _hasValue(group_title):
+            group_title = description
+
         # Build the payload wrapper
         payload: dict[str, Any] = {
             "error_if_duplicate_hash": self._duplicate_transaction_check,
             "apply_rules": apply_rules,
             "fire_webhooks": fire_webhooks,
-            "transactions": [transaction],
+            "transactions": transactionEntries,
         }
 
         # Add optional group title
@@ -328,6 +355,33 @@ class PayloadFactory:
             payload["group_title"] = group_title
 
         return payload
+
+    def _splitPayload(
+        self,
+        split: TransactionSplit | dict[str, Any],
+        *,
+        parent: dict[str, Any],
+        order: int,
+    ) -> dict[str, Any]:
+        """Build one transaction entry from a split definition."""
+        values = split.__dict__ if isinstance(split, TransactionSplit) else split
+        amount = values.get("amount")
+        if amount is None:
+            raise ValueError("A split transaction entry must include an amount")
+
+        entry = dict(parent)
+        entry["amount"] = str(amount)
+        entry["order"] = order
+        for key, value in (
+            ("source_name", values.get("source_name")),
+            ("destination_name", values.get("destination_name")),
+            ("category_name", values.get("category_name")),
+            ("tags", values.get("tags")),
+            ("notes", values.get("notes")),
+        ):
+            if _hasValue(value):
+                entry[key] = value
+        return entry
 
     def postAccount(
         self,

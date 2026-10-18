@@ -1,10 +1,137 @@
 import os
+import tempfile
 import unittest
+from dataclasses import fields
 from typing import Set
+from unittest import mock
+
+import requests
 
 from fireflyConverter import data
 from fireflyConverter import fireflyInterface as ffi
 from fireflyConverter import loadData as ldb
+
+
+def _accountsResponse(names: list, totalPages: int) -> dict:
+    """Build one mocked /accounts response page."""
+    accounts = []
+    for index, name in enumerate(names):
+        attributes = {field.name: None for field in fields(data.GetAccount)}
+        attributes.update({"name": name, "type": "expense", "active": True})
+        accounts.append({"id": str(index + 1), "attributes": attributes})
+    return {"data": accounts, "meta": {"pagination": {"total_pages": totalPages}}}
+
+
+class TestGetAccounts(unittest.TestCase):
+    """Offline tests for reading accounts from Firefly III."""
+
+    def setUp(self) -> None:
+        self._interface = ffi.FireflyInterface(base_url="http://firefly.test", api_token="token")
+        self._session = mock.Mock()
+        self._interface._session = self._session
+
+    def _respondWith(self, *pages: dict) -> None:
+        self._session.get.side_effect = [mock.Mock(json=lambda page=page: page) for page in pages]
+
+    def testReadsEveryPage(self):
+        self._respondWith(_accountsResponse(["Assets:Checking"], 2), _accountsResponse(["Restaurants"], 2))
+
+        accounts = self._interface.getAccounts()
+
+        self.assertEqual([account.name for account in accounts], ["Assets:Checking", "Restaurants"])
+
+    def testStopsAfterTheLastPage(self):
+        self._respondWith(_accountsResponse(["Restaurants"], 1))
+
+        self._interface.getAccounts()
+
+        self.assertEqual(self._session.get.call_count, 1)
+
+
+class TestCreateTransactionRuleFlag(unittest.TestCase):
+    """Offline test that the per-transaction rule flag reaches the request payload."""
+
+    def setUp(self) -> None:
+        self._interface = ffi.FireflyInterface(base_url="http://firefly.test", api_token="token")
+        self._interface._session = mock.Mock()
+        self._interface._session.post.return_value = mock.Mock(status_code=200)
+        self._transaction = data.PostTransaction(
+            date="2025-01-01", amount=1.0, description="coffee", type="withdrawal"
+        )
+
+    def _sentPayload(self) -> dict:
+        self._interface.createTransaction(self._transaction)
+        return self._interface._session.post.call_args.kwargs["json"]
+
+    def testApplyRulesIsSentToTheApi(self):
+        self._interface._session.post.reset_mock()
+
+        self._interface.createTransaction(self._transaction, apply_rules=True)
+
+        self.assertTrue(self._interface._session.post.call_args.kwargs["json"]["apply_rules"])
+
+    def testApplyRulesIsOffByDefault(self):
+        self.assertFalse(self._sentPayload()["apply_rules"])
+
+
+class TestUploadAttachment(unittest.TestCase):
+    def setUp(self):
+        self._interface = ffi.FireflyInterface(base_url="http://firefly.test", api_token="token")
+        self._interface._session = mock.Mock()
+        metadata = mock.Mock()
+        metadata.json.return_value = {"data": {"id": "42"}}
+        upload = mock.Mock(status_code=200)
+        self._interface._session.post.side_effect = [metadata, upload]
+
+    def testCreatesAndUploadsTransactionAttachment(self):
+        with tempfile.NamedTemporaryFile(suffix=".jpg") as bill:
+            bill.write(b"jpeg")
+            bill.flush()
+
+            response = self._interface.uploadAttachment(bill.name, "17")
+
+        self.assertEqual(response.status_code, 200)
+        metadataCall, uploadCall = self._interface._session.post.call_args_list
+        self.assertEqual(metadataCall.kwargs["json"]["attachable_type"], "TransactionJournal")
+        self.assertEqual(metadataCall.kwargs["json"]["attachable_id"], "17")
+        self.assertEqual(uploadCall.args[0], "http://firefly.test/api/v1/attachments/42/upload")
+        uploadFile = uploadCall.kwargs["files"]["file"]
+        self.assertEqual(uploadFile[0], os.path.basename(bill.name))
+        self.assertTrue(uploadFile[1].closed)
+
+    def testUsesProvidedFilenameForUpload(self):
+        with tempfile.NamedTemporaryFile(suffix=".jpg") as bill:
+            bill.write(b"jpeg")
+            bill.flush()
+
+            self._interface.uploadAttachment(bill.name, "17", "original.heic")
+
+        uploadCall = self._interface._session.post.call_args_list[1]
+        self.assertEqual(uploadCall.kwargs["files"]["file"][0], "original.heic")
+
+
+class TestCreateSuggestedAccounts(unittest.TestCase):
+    def setUp(self):
+        self._interface = ffi.FireflyInterface(base_url="http://firefly.test", api_token="token")
+        self._interface._session = mock.Mock()
+        self._interface._session.post.return_value = mock.Mock(status_code=201)
+
+    def testCreateAccountAcceptsNameAndType(self):
+        self._interface.createAccount("Travel", "expense")
+
+        payload = self._interface._session.post.call_args.kwargs["json"]
+        self.assertEqual(payload["name"], "Travel")
+        self.assertEqual(payload["type"], "expense")
+
+    def testCreateAccountsSkipsExistingNames(self):
+        existing = mock.Mock()
+        existing.name = "Existing"
+        self._interface.getAccounts = mock.Mock(return_value=[existing])
+        self._interface.createAccount = mock.Mock()
+
+        self._interface.createAccounts([("Existing", "expense"), ("New", "income")])
+
+        self._interface.createAccount.assert_called_once_with("New", "income")
 
 
 def create_test_rules(rule_group_id: int, title_prefix: str = "Test") -> list:
@@ -358,6 +485,75 @@ class TestRuleGroupInterface(TestInterfaceBase):
             str(context.exception),
             "Expected error message about missing rule group title",
         )
+
+
+class _StubResponse:
+    """Minimal stand-in for a requests.Response used to exercise pagination logic."""
+
+    def __init__(self, payload, status_code=200):
+        self._payload = payload
+        self.status_code = status_code
+
+    def json(self):
+        return self._payload
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"status {self.status_code}")
+
+
+class _StubSession:
+    """Serves scripted pages and records the requests it received."""
+
+    def __init__(self, pages):
+        self._pages = pages
+        self.requests = []
+
+    def get(self, url, params=None):
+        self.requests.append((url, params))
+        page = (params or {}).get("page", 1)
+        return _StubResponse(self._pages[page - 1])
+
+
+class TestCategoryTagListing(unittest.TestCase):
+    """Unit tests for category/tag listing that run without a Firefly server."""
+
+    def _interfaceWith(self, pages):
+        interface = ffi.FireflyInterface(base_url="http://localhost", api_token="token")
+        interface._session = _StubSession(pages)
+        return interface, interface._session
+
+    def testGetCategoriesCollectsAllPages(self):
+        pages = [
+            {
+                "data": [{"attributes": {"name": "Groceries"}}, {"attributes": {"name": "Rent"}}],
+                "meta": {"pagination": {"total_pages": 2}},
+            },
+            {
+                "data": [{"attributes": {"name": "Travel"}}],
+                "meta": {"pagination": {"total_pages": 2}},
+            },
+        ]
+        interface, session = self._interfaceWith(pages)
+
+        self.assertEqual(interface.getCategories(), ["Groceries", "Rent", "Travel"])
+        self.assertEqual(len(session.requests), 2)
+
+    def testGetTagsReadsTagAttribute(self):
+        pages = [
+            {"data": [{"attributes": {"tag": "bill-matched"}}], "meta": {"pagination": {"total_pages": 1}}},
+        ]
+        interface, _ = self._interfaceWith(pages)
+
+        self.assertEqual(interface.getTags(), ["bill-matched"])
+
+    def testSinglePageStopsAfterFirstRequest(self):
+        pages = [{"data": [{"attributes": {"name": "Groceries"}}], "meta": {"pagination": {"total_pages": 1}}}]
+        interface, session = self._interfaceWith(pages)
+
+        interface.getCategories()
+
+        self.assertEqual(len(session.requests), 1)
 
 
 if __name__ == "__main__":

@@ -3,7 +3,8 @@ from __future__ import annotations
 import ast
 import enum
 import logging
-from typing import Dict, List, Optional, Union, overload
+import os
+from typing import Dict, List, Optional, Sequence, Tuple, Union, overload
 
 import requests
 
@@ -35,6 +36,7 @@ class FireflyInterface:
     including creating accounts, managing transactions, and retrieving account information.
 
     The class handles API authentication, duplicate transaction detection, and error handling.
+    Duplicate transactions are logged as warnings by default and do not abort the transfer.
     Transactions are created with a single side mapped to the provided account and a balancing
     side using the default balance account.
 
@@ -58,7 +60,7 @@ class FireflyInterface:
         base_url: str,
         api_token: str,
         default_balance_account_id: Optional[int] = None,
-        duplicate_transaction: DuplicateTransactionHandle | str = DuplicateTransactionHandle.ERROR,
+        duplicate_transaction: DuplicateTransactionHandle | str = DuplicateTransactionHandle.IGNORE,
     ) -> None:
         """Initialize the Firefly III API interface.
 
@@ -69,7 +71,7 @@ class FireflyInterface:
                 Defaults to None.
             duplicate_transaction (DuplicateTransactionHandle | str): How to handle duplicate transactions.
                 Can be a DuplicateTransactionHandle enum or string value ("ignore" or "error").
-                Defaults to DuplicateTransactionHandle.ERROR.
+                Defaults to DuplicateTransactionHandle.IGNORE.
         """
         self._base_url = base_url.rstrip("/")
         self._api_url = f"{self._base_url}/api/v1"
@@ -90,32 +92,35 @@ class FireflyInterface:
             }
         )
 
-    def _postTransaction(self, transaction: data.BaseTransaction) -> requests.Response:
+    def _postTransaction(self, transaction: data.BaseTransaction, apply_rules: bool = False) -> requests.Response:
         """Post a transaction to the Firefly III API with error handling.
 
-        Sends a transaction to the API and handles duplicate transaction detection
-        based on the configured duplicate transaction handling mode.
+        Sends a transaction to the API and handles duplicate transaction detection.
+        Duplicate transactions are logged as warnings and do not raise exceptions.
+        Other 422 errors still raise an Exception.
 
         Args:
             transaction (data.BaseTransaction): The transaction to post.
+            apply_rules (bool): Whether Firefly III should run its rules on the
+                created transaction. Defaults to False.
 
         Returns:
             requests.Response: The HTTP response from the API.
 
         Raises:
-            Exception: If the API returns an error and duplicate handling is not set to IGNORE.
+            Exception: If the API returns a non-duplicate 422 error.
             requests.HTTPError: If the HTTP request fails with a non-422 status code.
         """
         logger.debug(f"Creating transaction: {transaction.description} (amount: {transaction.amount})")
-        payload = self._payloadFactory.toPayload(transaction)
+        payload = self._payloadFactory.toPayload(transaction, apply_rules=apply_rules)
         url = f"{self._api_url}/transactions"
         resp = self._session.post(url, json=payload)
 
         if resp.status_code == 422:
             errorMessage: str = ast.literal_eval(resp.text).get("message")
             isDuplicate = "duplicate" in errorMessage.lower()
-            if isDuplicate and self._duplicate_transaction == DuplicateTransactionHandle.IGNORE:
-                logger.debug("Duplicate transaction detected.")
+            if isDuplicate:
+                logger.warning("Duplicate transaction detected: %s", errorMessage)
                 return resp
             else:
                 logger.error(f"Error creating transaction: {errorMessage}")
@@ -125,10 +130,10 @@ class FireflyInterface:
         return resp
 
     def getAccounts(self) -> List[data.GetAccount]:
-        """Retrieve the list of accounts from the Firefly III server.
+        """Retrieve every account from the Firefly III server.
 
-        Fetches all accounts configured in the Firefly III instance and converts
-        the API response data into GetAccount objects.
+        Fetches all accounts configured in the Firefly III instance, page by
+        page, and converts the API response data into GetAccount objects.
 
         Returns:
             List[data.GetAccount]: List of account objects with their attributes and metadata.
@@ -138,23 +143,88 @@ class FireflyInterface:
         """
         logger.info("Retrieving accounts from Firefly III")
         url = f"{self._api_url}/accounts"
-        response = self._session.get(url)
-        response.raise_for_status()
-        accountResponses: Dict = response.json().get("data", [])
-
         accounts: List[data.GetAccount] = []
-        for response in accountResponses:
-            accountData = response.get("attributes", {})
-            accountData["id"] = response.get("id")
-            accounts.append(data.GetAccount(**accountData))
+        page = 1
+        while True:
+            response = self._session.get(url, params={"page": page, "limit": 100})
+            response.raise_for_status()
+            body: Dict = response.json()
+            for accountResponse in body.get("data", []):
+                accountData = accountResponse.get("attributes", {})
+                accountData["id"] = accountResponse.get("id")
+                accounts.append(data.GetAccount(**accountData))
+            totalPages = body.get("meta", {}).get("pagination", {}).get("total_pages", 1)
+            if page >= totalPages:
+                break
+            page += 1
         logger.info(f"Retrieved {len(accounts)} accounts from Firefly III")
         return accounts
 
-    def createAccount(self, account: data.PostAccount) -> requests.Response:
+    def _getAllAttributeValues(self, endpoint: str, attribute: str) -> List[str]:
+        """Fetch every page of a list endpoint and collect one attribute per item.
+
+        Args:
+            endpoint (str): API path below /api/v1 (e.g. "/categories").
+            attribute (str): Attribute key read from each item's attributes.
+
+        Returns:
+            List[str]: Collected attribute values in server order.
+        """
+        values: List[str] = []
+        page = 1
+        while True:
+            url = f"{self._api_url}{endpoint}"
+            response = self._session.get(url, params={"page": page, "limit": 100})
+            response.raise_for_status()
+            body: Dict = response.json()
+            for item in body.get("data", []):
+                value = item.get("attributes", {}).get(attribute)
+                if value is not None:
+                    values.append(value)
+            totalPages = body.get("meta", {}).get("pagination", {}).get("total_pages", 1)
+            if page >= totalPages:
+                break
+            page += 1
+        return values
+
+    def getCategories(self) -> List[str]:
+        """Retrieve the names of all categories defined on the Firefly III server.
+
+        Returns:
+            List[str]: Category names.
+
+        Raises:
+            requests.HTTPError: If the HTTP request fails.
+        """
+        logger.info("Retrieving categories from Firefly III")
+        categories = self._getAllAttributeValues("/categories", "name")
+        logger.info(f"Retrieved {len(categories)} categories from Firefly III")
+        return categories
+
+    def getTags(self) -> List[str]:
+        """Retrieve the names of all tags defined on the Firefly III server.
+
+        Returns:
+            List[str]: Tag names.
+
+        Raises:
+            requests.HTTPError: If the HTTP request fails.
+        """
+        logger.info("Retrieving tags from Firefly III")
+        tags = self._getAllAttributeValues("/tags", "tag")
+        logger.info(f"Retrieved {len(tags)} tags from Firefly III")
+        return tags
+
+    def createAccount(
+        self,
+        account: data.PostAccount | str,
+        account_type: Optional[str] = None,
+    ) -> requests.Response:
         """Create a new account on the Firefly III server.
 
         Args:
-            account (data.PostAccount): The account object to create.
+            account (data.PostAccount | str): The account object or account name to create.
+            account_type (Optional[str]): Account type when ``account`` is a name.
 
         Returns:
             requests.Response: The HTTP response from the Firefly API.
@@ -162,6 +232,14 @@ class FireflyInterface:
         Raises:
             requests.HTTPError: If the HTTP request fails.
         """
+        if isinstance(account, str):
+            if account_type == "expense":
+                account = data.PostExpenseAccount(name=account)
+            elif account_type == "income":
+                account = data.PostIncomeAccount(name=account)
+            else:
+                raise ValueError(f"Unsupported account type: {account_type}")
+
         logger.info(f"Creating account: {account.name}")
         url = f"{self._api_url}/accounts"
         payload = self._payloadFactory.toPayload(account)
@@ -169,6 +247,27 @@ class FireflyInterface:
         resp.raise_for_status()
         logger.debug(f"Account {account.name} created successfully (status: {resp.status_code})")
         return resp
+
+    def createAccounts(self, names: Sequence[Tuple[str, str]]) -> None:
+        """Create missing bill-suggested accounts in one batch operation.
+
+        Existing accounts are compared case-insensitively and are skipped.
+        A failed account creation is logged and does not prevent the remaining
+        accounts from being attempted.
+        """
+        if not names:
+            return
+
+        existing = {account.name.strip().lower() for account in self.getAccounts()}
+        for name, account_type in names:
+            normalized = name.strip().lower()
+            if not name.strip() or normalized in existing:
+                continue
+            try:
+                self.createAccount(name.strip(), account_type)
+                existing.add(normalized)
+            except Exception as error:  # noqa: BLE001 - account creation must not abort a transfer
+                logger.warning("Could not create account '%s': %s", name, error)
 
     def deleteAccount(self, account_id: str) -> requests.Response:
         """Delete an account on the Firefly III server.
@@ -251,24 +350,67 @@ class FireflyInterface:
         resp.raise_for_status()
         return resp
 
-    def createTransaction(self, transaction: data.BaseTransaction) -> requests.Response:
+    def createTransaction(self, transaction: data.BaseTransaction, apply_rules: bool = False) -> requests.Response:
         """Create a single transaction on the Firefly III server.
 
-        Posts a transaction to the Firefly III API. Handles duplicate transaction
-        detection and error reporting based on the configured duplicate handling mode.
+        Posts a transaction to the Firefly III API. Duplicate transactions are
+        logged as warnings and do not raise exceptions. Other 422 errors still
+        raise an Exception.
 
         Args:
             transaction (data.BaseTransaction): The transaction to create.
+            apply_rules (bool): Whether Firefly III should run its rules on the
+                created transaction. Defaults to False.
 
         Returns:
             requests.Response: The HTTP response from the Firefly API.
 
         Raises:
-            Exception: If the API returns an error (422 status) and duplicate handling
-                is not set to IGNORE.
+            Exception: If the API returns a non-duplicate 422 error.
             requests.HTTPError: If the HTTP request fails with a non-422 status code.
         """
-        return self._postTransaction(transaction)
+        return self._postTransaction(transaction, apply_rules=apply_rules)
+
+    def uploadAttachment(
+        self, path: str, transaction_journal_id: str, filename: Optional[str] = None
+    ) -> requests.Response:
+        """Upload and attach a file to a Firefly III transaction journal.
+
+        Firefly III creates the attachment metadata first, then accepts the
+        binary file contents at the attachment-specific upload endpoint.
+
+        Args:
+            path (str): Path to the prepared file.
+            transaction_journal_id (str): Firefly transaction journal ID.
+
+        Returns:
+            requests.Response: The upload response.
+
+        Raises:
+            requests.HTTPError: If either attachment request fails.
+            KeyError: If Firefly III omits the new attachment ID.
+        """
+        filename = filename or os.path.basename(path)
+        logger.info("Uploading attachment %s to transaction %s", filename, transaction_journal_id)
+        metadataResponse = self._session.post(
+            f"{self._api_url}/attachments",
+            json={
+                "filename": filename,
+                "title": filename,
+                "attachable_type": "TransactionJournal",
+                "attachable_id": str(transaction_journal_id),
+            },
+        )
+        metadataResponse.raise_for_status()
+        attachmentId = str(metadataResponse.json()["data"]["id"])
+
+        with open(path, "rb") as handle:
+            uploadResponse = self._session.post(
+                f"{self._api_url}/attachments/{attachmentId}/upload",
+                files={"file": (filename, handle)},
+            )
+        uploadResponse.raise_for_status()
+        return uploadResponse
 
     def getTransactions(
         self,

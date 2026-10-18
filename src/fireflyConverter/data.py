@@ -8,6 +8,18 @@ class TransactionType(enum.Enum):
 
 
 @dc.dataclass
+class TransactionSplit:
+    """One split entry for a Firefly III transaction."""
+
+    amount: float | str
+    category_name: str | None = None
+    source_name: str | None = None
+    destination_name: str | None = None
+    tags: list[str] | None = None
+    notes: str | None = None
+
+
+@dc.dataclass
 class BaseTransaction:
     """Base transaction data class for financial transactions.
 
@@ -95,6 +107,7 @@ class BaseTransaction:
     due_date: str | None
     payment_date: str | None
     invoice_date: str | None
+    split_transactions: list[TransactionSplit] | None = None
 
 
 @dc.dataclass
@@ -300,6 +313,55 @@ class PostTransaction(BaseTransaction):
     due_date: str | None = None
     payment_date: str | None = None
     invoice_date: str | None = None
+
+
+@dc.dataclass
+class Bill:
+    """Bill data extracted from a single invoice or receipt document.
+
+    Values are produced by the local LLM and consumed by the bill-aware
+    import to enrich the matching transaction. Missing fields stay None so
+    that matching can skip incomplete extractions.
+
+    Attributes:
+        path (str): Path of the source bill file.
+        total (float | None): Gross total amount stated on the bill.
+        currency (str | None): Currency code of the total.
+        date (str | None): Bill date in ISO 8601 (YYYY-MM-DD) format.
+        vendor (str | None): Merchant or issuer name.
+        category (str | None): Category chosen from the existing Firefly III categories.
+        account (str | None): Counter-account chosen from the existing Firefly III accounts.
+        tags (list[str]): Tags chosen from the existing Firefly III tags.
+        note (str | None): Short human-readable summary of the bill.
+        confidence (float): Model confidence in the extraction, between 0 and 1.
+        splits (list[BillSplit]): Optional line-item allocations for a bill whose
+            positions need different categories or tags.
+        llm_response (str | None): Raw LLM response text before parsing.
+    """
+
+    path: str
+    total: float | None = None
+    currency: str | None = None
+    date: str | None = None
+    vendor: str | None = None
+    category: str | None = None
+    account: str | None = None
+    tags: list[str] = dc.field(default_factory=list)
+    note: str | None = None
+    confidence: float = 0.0
+    splits: list["BillSplit"] = dc.field(default_factory=list)
+    llm_response: str | None = None
+
+
+@dc.dataclass
+class BillSplit:
+    """One line-item allocation extracted from a bill."""
+
+    amount: float | None = None
+    category: str | None = None
+    tags: list[str] = dc.field(default_factory=list)
+    note: str | None = None
+    confidence: float = 0.0
 
 
 @dc.dataclass
@@ -515,6 +577,14 @@ class PostExpenseAccount(PostAccount):
     def __post_init__(self):
         # Lock down immutable account type for expense accounts
         object.__setattr__(self, "type", "expense")
+
+
+@dc.dataclass
+class PostIncomeAccount(PostAccount):
+    """Income account data class for posting to Firefly III."""
+
+    def __post_init__(self):
+        object.__setattr__(self, "type", "income")
 
 
 @dc.dataclass

@@ -3,7 +3,7 @@
 ## Setup
 
 - Requires Python >= 3.11.
-- Install the package with dev dependencies: `pip install -e ".[dev]"`
+- Install the package with dev dependencies: `uv sync --dev`
 - There is no development container; install dependencies directly.
 
 ## Repository layout
