@@ -127,10 +127,10 @@ class FireflyInterface:
         return resp
 
     def getAccounts(self) -> List[data.GetAccount]:
-        """Retrieve the list of accounts from the Firefly III server.
+        """Retrieve every account from the Firefly III server.
 
-        Fetches all accounts configured in the Firefly III instance and converts
-        the API response data into GetAccount objects.
+        Fetches all accounts configured in the Firefly III instance, page by
+        page, and converts the API response data into GetAccount objects.
 
         Returns:
             List[data.GetAccount]: List of account objects with their attributes and metadata.
@@ -140,15 +140,20 @@ class FireflyInterface:
         """
         logger.info("Retrieving accounts from Firefly III")
         url = f"{self._api_url}/accounts"
-        response = self._session.get(url)
-        response.raise_for_status()
-        accountResponses: Dict = response.json().get("data", [])
-
         accounts: List[data.GetAccount] = []
-        for response in accountResponses:
-            accountData = response.get("attributes", {})
-            accountData["id"] = response.get("id")
-            accounts.append(data.GetAccount(**accountData))
+        page = 1
+        while True:
+            response = self._session.get(url, params={"page": page, "limit": 100})
+            response.raise_for_status()
+            body: Dict = response.json()
+            for accountResponse in body.get("data", []):
+                accountData = accountResponse.get("attributes", {})
+                accountData["id"] = accountResponse.get("id")
+                accounts.append(data.GetAccount(**accountData))
+            totalPages = body.get("meta", {}).get("pagination", {}).get("total_pages", 1)
+            if page >= totalPages:
+                break
+            page += 1
         logger.info(f"Retrieved {len(accounts)} accounts from Firefly III")
         return accounts
 

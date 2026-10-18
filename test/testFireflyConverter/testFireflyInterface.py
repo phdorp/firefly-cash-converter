@@ -1,5 +1,6 @@
 import os
 import unittest
+from dataclasses import fields
 from typing import Set
 from unittest import mock
 
@@ -8,6 +9,42 @@ import requests
 from fireflyConverter import data
 from fireflyConverter import fireflyInterface as ffi
 from fireflyConverter import loadData as ldb
+
+
+def _accountsResponse(names: list, totalPages: int) -> dict:
+    """Build one mocked /accounts response page."""
+    accounts = []
+    for index, name in enumerate(names):
+        attributes = {field.name: None for field in fields(data.GetAccount)}
+        attributes.update({"name": name, "type": "expense", "active": True})
+        accounts.append({"id": str(index + 1), "attributes": attributes})
+    return {"data": accounts, "meta": {"pagination": {"total_pages": totalPages}}}
+
+
+class TestGetAccounts(unittest.TestCase):
+    """Offline tests for reading accounts from Firefly III."""
+
+    def setUp(self) -> None:
+        self._interface = ffi.FireflyInterface(base_url="http://firefly.test", api_token="token")
+        self._session = mock.Mock()
+        self._interface._session = self._session
+
+    def _respondWith(self, *pages: dict) -> None:
+        self._session.get.side_effect = [mock.Mock(json=lambda page=page: page) for page in pages]
+
+    def testReadsEveryPage(self):
+        self._respondWith(_accountsResponse(["Assets:Checking"], 2), _accountsResponse(["Restaurants"], 2))
+
+        accounts = self._interface.getAccounts()
+
+        self.assertEqual([account.name for account in accounts], ["Assets:Checking", "Restaurants"])
+
+    def testStopsAfterTheLastPage(self):
+        self._respondWith(_accountsResponse(["Restaurants"], 1))
+
+        self._interface.getAccounts()
+
+        self.assertEqual(self._session.get.call_count, 1)
 
 
 class TestCreateTransactionRuleFlag(unittest.TestCase):
