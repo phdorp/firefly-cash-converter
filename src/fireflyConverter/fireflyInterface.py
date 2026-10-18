@@ -36,6 +36,7 @@ class FireflyInterface:
     including creating accounts, managing transactions, and retrieving account information.
 
     The class handles API authentication, duplicate transaction detection, and error handling.
+    Duplicate transactions are logged as warnings by default and do not abort the transfer.
     Transactions are created with a single side mapped to the provided account and a balancing
     side using the default balance account.
 
@@ -59,7 +60,7 @@ class FireflyInterface:
         base_url: str,
         api_token: str,
         default_balance_account_id: Optional[int] = None,
-        duplicate_transaction: DuplicateTransactionHandle | str = DuplicateTransactionHandle.ERROR,
+        duplicate_transaction: DuplicateTransactionHandle | str = DuplicateTransactionHandle.IGNORE,
     ) -> None:
         """Initialize the Firefly III API interface.
 
@@ -70,7 +71,7 @@ class FireflyInterface:
                 Defaults to None.
             duplicate_transaction (DuplicateTransactionHandle | str): How to handle duplicate transactions.
                 Can be a DuplicateTransactionHandle enum or string value ("ignore" or "error").
-                Defaults to DuplicateTransactionHandle.ERROR.
+                Defaults to DuplicateTransactionHandle.IGNORE.
         """
         self._base_url = base_url.rstrip("/")
         self._api_url = f"{self._base_url}/api/v1"
@@ -94,8 +95,9 @@ class FireflyInterface:
     def _postTransaction(self, transaction: data.BaseTransaction, apply_rules: bool = False) -> requests.Response:
         """Post a transaction to the Firefly III API with error handling.
 
-        Sends a transaction to the API and handles duplicate transaction detection
-        based on the configured duplicate transaction handling mode.
+        Sends a transaction to the API and handles duplicate transaction detection.
+        Duplicate transactions are logged as warnings and do not raise exceptions.
+        Other 422 errors still raise an Exception.
 
         Args:
             transaction (data.BaseTransaction): The transaction to post.
@@ -106,7 +108,7 @@ class FireflyInterface:
             requests.Response: The HTTP response from the API.
 
         Raises:
-            Exception: If the API returns an error and duplicate handling is not set to IGNORE.
+            Exception: If the API returns a non-duplicate 422 error.
             requests.HTTPError: If the HTTP request fails with a non-422 status code.
         """
         logger.debug(f"Creating transaction: {transaction.description} (amount: {transaction.amount})")
@@ -117,8 +119,8 @@ class FireflyInterface:
         if resp.status_code == 422:
             errorMessage: str = ast.literal_eval(resp.text).get("message")
             isDuplicate = "duplicate" in errorMessage.lower()
-            if isDuplicate and self._duplicate_transaction == DuplicateTransactionHandle.IGNORE:
-                logger.debug("Duplicate transaction detected.")
+            if isDuplicate:
+                logger.warning("Duplicate transaction detected: %s", errorMessage)
                 return resp
             else:
                 logger.error(f"Error creating transaction: {errorMessage}")
@@ -351,8 +353,9 @@ class FireflyInterface:
     def createTransaction(self, transaction: data.BaseTransaction, apply_rules: bool = False) -> requests.Response:
         """Create a single transaction on the Firefly III server.
 
-        Posts a transaction to the Firefly III API. Handles duplicate transaction
-        detection and error reporting based on the configured duplicate handling mode.
+        Posts a transaction to the Firefly III API. Duplicate transactions are
+        logged as warnings and do not raise exceptions. Other 422 errors still
+        raise an Exception.
 
         Args:
             transaction (data.BaseTransaction): The transaction to create.
@@ -363,8 +366,7 @@ class FireflyInterface:
             requests.Response: The HTTP response from the Firefly API.
 
         Raises:
-            Exception: If the API returns an error (422 status) and duplicate handling
-                is not set to IGNORE.
+            Exception: If the API returns a non-duplicate 422 error.
             requests.HTTPError: If the HTTP request fails with a non-422 status code.
         """
         return self._postTransaction(transaction, apply_rules=apply_rules)
