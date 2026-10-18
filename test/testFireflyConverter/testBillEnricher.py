@@ -220,10 +220,8 @@ class TestBillEnricher(unittest.TestCase):
             )
 
             report = enricher.enrich([transaction])
-            unpackedReport, newAccounts = report
-
-            self.assertIs(unpackedReport, report)
-            self.assertEqual(newAccounts, [("New merchant", "expense")])
+            self.assertIsNone(transaction.destination_name)
+            self.assertFalse(hasattr(report, "new_accounts"))
 
     def testReportsAdditionalBillsOnASplit(self):
         with tempfile.TemporaryDirectory() as directory:

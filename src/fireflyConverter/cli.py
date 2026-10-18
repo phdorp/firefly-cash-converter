@@ -237,10 +237,6 @@ def transfer(arguments: Namespace):
         logger.info("Dry run completed; no transactions were transferred")
         return
 
-    if report is not None and report.new_accounts:
-        logger.info(f"Creating {len(report.new_accounts)} account(s) suggested by bills")
-        interface.createAccounts(report.new_accounts)
-
     logger.info(f"Transferring {len(transactions)} transactions to Firefly III")
     processed_count = 0
     rulesAppliedCount = 0
@@ -393,7 +389,12 @@ def _tagAutoLabeled(transaction: data.BaseTransaction, applyRules: bool, autoLab
         transaction.tags = tags + [AUTO_LABELED_TAG]
 
 
-def _accountNamesForBills(interface: ffi.FireflyInterface, accountName: Optional[str], enabled: bool) -> List[str]:
+def _accountNamesForBills(
+    interface: ffi.FireflyInterface,
+    accountName: Optional[str],
+    enabled: bool,
+    accountTypes: Optional[List[str]] = None,
+) -> List[str]:
     """Return the account names a bill may be mapped to.
 
     Only accounts that are not disabled are offered, and the account the
@@ -404,6 +405,7 @@ def _accountNamesForBills(interface: ffi.FireflyInterface, accountName: Optional
         interface (ffi.FireflyInterface): Interface used to read the existing accounts.
         accountName (Optional[str]): Account the transactions are imported into.
         enabled (bool): Whether the bills may set the counter-account.
+        accountTypes (Optional[List[str]]): Allowed Firefly account types.
 
     Returns:
         List[str]: Account names offered to the reader, empty when disabled.
@@ -412,7 +414,14 @@ def _accountNamesForBills(interface: ffi.FireflyInterface, accountName: Optional
         return []
     logger.info("Loading existing accounts from Firefly III")
     accounts = interface.getAccounts()
-    return [account.name for account in accounts if account.active is not False and account.name != accountName]
+    allowedTypes = {"expense"} if accountTypes is None else set(accountTypes)
+    return [
+        account.name
+        for account in accounts
+        if account.active is not False
+        and account.name != accountName
+        and account.type in allowedTypes
+    ]
 
 
 def _runEnrichment(
@@ -444,7 +453,7 @@ def _runEnrichment(
     logger.info("Loading existing categories and tags from Firefly III")
     categories = interface.getCategories()
     tags = interface.getTags()
-    accounts = _accountNamesForBills(interface, accountName, billConfig.accounts)
+    accounts = _accountNamesForBills(interface, accountName, billConfig.accounts, billConfig.account_types)
 
     reader = bls.BillReader(client, categories, tags, accounts, vision=billConfig.vision, maxPages=billConfig.max_pages)
     enricher = bce.BillEnricher(reader, categories, tags, accounts, billConfig)

@@ -280,7 +280,7 @@ def applyBill(
         markerTag (Optional[str]): Audit tag added to enriched transactions. Defaults to "bill-matched".
         confidenceThreshold (float): Minimum confidence to apply category, account and tags. Defaults to 0.5.
         additional_bills (Sequence[data.Bill]): Other bills contributing to a split.
-        accountsEnabled (Optional[bool]): Whether unknown account names may be created.
+        accountsEnabled (Optional[bool]): Retained for API compatibility; unknown account names are never created.
         amountTolerance (float): Allowed difference between split total and transaction amount.
 
     Returns:
@@ -288,8 +288,6 @@ def applyBill(
     """
     issues: List[str] = []
     resolvedTags: List[str] = []
-    allowNewAccounts = bool(accounts) if accountsEnabled is None else accountsEnabled
-
     if bill.confidence < confidenceThreshold:
         issues.append(
             f"Low confidence ({bill.confidence:.2f} < {confidenceThreshold}); "
@@ -303,12 +301,9 @@ def applyBill(
 
         accountField = "source_name" if transaction.type == data.TransactionType.DEPOSIT.value else "destination_name"
         existingAccount = getattr(transaction, accountField)
-        accountName, _ = _applyAccount(bill, transaction, accounts, allowNew=allowNewAccounts)
+        accountName, _ = _applyAccount(bill, transaction, accounts, allowNew=False)
         if existingAccount and accountName and _canonicalName(existingAccount, [accountName]) is None:
             issues.append(f"Kept existing account '{existingAccount}'; bill suggested '{accountName}'")
-        if bill.account and accountName is None and accounts:
-            issues.append(f"Account '{bill.account}' could not be applied")
-
         resolvedTags, unknownTags = _canonicalTags(bill.tags, tags)
         for unknown in unknownTags:
             issues.append(f"Tag '{unknown}' is not defined in Firefly III; dropped")
@@ -393,7 +388,7 @@ def _applyAccount(
     Returns:
         Tuple[Optional[str], Optional[str]]: Account name and inferred Firefly type.
     """
-    if not bill.account or not accounts and not allowNew:
+    if not bill.account or not accounts:
         return None, None
 
     account = _canonicalName(bill.account, accounts)

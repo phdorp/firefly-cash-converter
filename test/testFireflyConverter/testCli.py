@@ -351,12 +351,12 @@ class TestBillAccountPool(unittest.TestCase):
     """Offline tests for the accounts offered to the bill reader."""
 
     def _accounts(self, *pairs):
-        return [types.SimpleNamespace(name=name, active=active) for name, active in pairs]
+        return [types.SimpleNamespace(name=name, active=active, type=accountType) for name, active, accountType in pairs]
 
     def testReturnsActiveAccountsWithoutTheImportedOne(self):
         interface = mock.Mock()
         interface.getAccounts.return_value = self._accounts(
-            ("tr", True), ("Groceries", True), ("Closed account", False)
+            ("tr", True, "asset"), ("Groceries", True, "expense"), ("Closed account", False, "expense")
         )
 
         accounts = cli._accountNamesForBills(interface, "tr", enabled=True)
@@ -365,7 +365,7 @@ class TestBillAccountPool(unittest.TestCase):
 
     def testAccountsWithoutAnActiveFlagAreKept(self):
         interface = mock.Mock()
-        interface.getAccounts.return_value = self._accounts(("Groceries", None))
+        interface.getAccounts.return_value = self._accounts(("Groceries", None, "expense"))
 
         accounts = cli._accountNamesForBills(interface, "tr", enabled=True)
 
@@ -378,6 +378,16 @@ class TestBillAccountPool(unittest.TestCase):
 
         self.assertEqual(accounts, [])
         interface.getAccounts.assert_not_called()
+
+    def testOnlyConfiguredAccountTypesAreReturned(self):
+        interface = mock.Mock()
+        interface.getAccounts.return_value = self._accounts(
+            ("Groceries", True, "expense"), ("Salary", True, "income"), ("Checking", True, "asset")
+        )
+
+        accounts = cli._accountNamesForBills(interface, "tr", enabled=True, accountTypes=["income"])
+
+        self.assertEqual(accounts, ["Salary"])
 
 
 class TestTransferWithBills(unittest.TestCase):

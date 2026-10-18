@@ -145,7 +145,7 @@ Accepted formats: `.pdf`, `.png`, `.jpg`, `.jpeg`, `.webp`, `.heic`, `.heif`. Wh
 
 Bills are matched to **withdrawal** transactions by exact amount, a date window and vendor similarity. A bill that matches no transaction, matches several, or cannot be read is skipped and listed in the report; the rest of the import continues. Transactions without a bill are transferred unchanged.
 
-Categories and tags must already exist in Firefly III. Bills may suggest a new counter-account; it is created automatically as an expense account for withdrawals or an income account for deposits. Extractions below the confidence threshold get neither category, account nor tags. A marker tag (`bill-matched` by default) and a note pointing at the source file are always written so the enrichment stays traceable.
+Categories, tags and bill counter-accounts must already exist in Firefly III. By default, only active expense accounts are offered; configure `account_types` to allow other Firefly account types. Extractions below the confidence threshold get neither category, account nor tags. A marker tag (`bill-matched` by default) and a note pointing at the source file are always written so the enrichment stays traceable.
 
 Multiple bills may cover one transaction when their totals add up to the transaction amount. Each bill becomes a split entry with its own category, tags and note. The split limit is five bills by default; additional matches are reported as ambiguous.
 
@@ -175,6 +175,7 @@ vision = true                      # allow sending bills to the vision model
 # pip install "firefly-cash-converter[heic]"
 max_pages = 1                      # PDF pages considered for text extraction
 accounts = true                    # let bills also set the counter-account
+account_types = ["expense"]        # existing Firefly account types offered to bills
 max_split_balls = 5                # maximum bills contributing to one transaction
 
 [llm]

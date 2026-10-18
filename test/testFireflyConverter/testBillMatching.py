@@ -181,13 +181,13 @@ class TestApplyBill(unittest.TestCase):
         self.assertEqual(transaction.destination_name, "Restaurants")
         self.assertEqual(issues, [])
 
-    def testUnknownAccountIsAcceptedForCreation(self):
+    def testUnknownAccountIsIgnored(self):
         transaction = _tx(12.34, "2026-10-01", "ACME GmbH")
         bill = _bill(account="Travel", confidence=0.9)
 
         issues = bm.applyBill(bill, transaction, categories=[], tags=[], accounts=["Groceries"])
 
-        self.assertEqual(transaction.destination_name, "Travel")
+        self.assertIsNone(transaction.destination_name)
         self.assertEqual(issues, [])
 
     def testNoAccountVocabularyLeavesTheTransactionAlone(self):

@@ -35,6 +35,8 @@ vision = true
 max_pages = 1
 # let bills also set the transaction's counter-account (only filled when empty)
 accounts = true
+# existing Firefly account types offered to bills
+account_types = ["expense"]
 # maximum bills contributing to one transaction
 max_split_balls = 5
 

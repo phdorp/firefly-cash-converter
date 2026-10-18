@@ -46,6 +46,7 @@ class BillConfig:
     vision: bool = True
     max_pages: int = 1
     accounts: bool = True
+    account_types: List[str] = dc.field(default_factory=lambda: ["expense"])
     max_split_balls: int = 5
 
 
@@ -84,7 +85,6 @@ class EnrichmentReport:
         duplicates (List[str]): Bills whose only candidate transaction was claimed by another bill.
         errors (List[str]): Bills that could not be read or parsed.
         issues (List[str]): Non-fatal warnings from applying bills.
-        new_accounts (List[tuple[str, str]]): Account names and types suggested by bills.
     """
 
     matched: List[MatchRecord] = dc.field(default_factory=list)
@@ -94,24 +94,6 @@ class EnrichmentReport:
     duplicates: List[str] = dc.field(default_factory=list)
     errors: List[str] = dc.field(default_factory=list)
     issues: List[str] = dc.field(default_factory=list)
-    new_accounts: List[tuple[str, str]] = dc.field(default_factory=list)
-
-    def __iter__(self):
-        """Allow backwards-compatible report use and tuple unpacking."""
-        yield self
-        yield self.new_accounts
-
-    def __getitem__(self, index: int):
-        """Expose tuple-style access for callers adopting the new return shape."""
-        if index == 0:
-            return self
-        if index == 1:
-            return self.new_accounts
-        raise IndexError(index)
-
-    def __len__(self) -> int:
-        return 2
-
 
 class BillEnricher:
     """Match dropped bills to transactions and enrich the matched ones.
@@ -224,18 +206,6 @@ class BillEnricher:
                     if outcome.transaction.type == data.TransactionType.DEPOSIT.value
                     else "destination_name"
                 )
-                chosenAccount = getattr(outcome.transaction, accountField)
-                if (
-                    self._config.accounts
-                    and bill.account
-                    and chosenAccount
-                    and bm._canonicalName(bill.account, self._accounts) is None
-                    and bm._canonicalName(chosenAccount, [bill.account]) is not None
-                ):
-                    accountType = bm._accountType(outcome.transaction)
-                    account = (chosenAccount, accountType)
-                    if account not in report.new_accounts:
-                        report.new_accounts.append(account)
 
                 report.matched.append(
                     MatchRecord(
@@ -367,12 +337,6 @@ def renderReport(report: EnrichmentReport, verbose: bool = False) -> str:
     lines.append("## Warnings")
     lines.extend(f"- {issue}" for issue in report.issues)
     if not report.issues:
-        lines.append("- (none)")
-
-    lines.append("")
-    lines.append("## New accounts")
-    lines.extend(f"- {name} ({account_type})" for name, account_type in report.new_accounts)
-    if not report.new_accounts:
         lines.append("- (none)")
 
     lines.append("")
